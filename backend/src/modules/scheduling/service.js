@@ -3,6 +3,7 @@ import { getComplianceStatus, getTradeFit, normalizeTrade } from "../pca/taxonom
 import { getJobRecommendations } from "../recommendations/service.js";
 import { getJobSchedulingContext } from "./repository.js";
 import { runFieldToPlanAudit } from "./audit.service.js";
+import { adjustLookahead } from "./adjustLookahead.service.js";
 
 const TASK_PHASES = ["rough-in", "install", "test", "closeout"];
 
@@ -194,12 +195,20 @@ export async function getJobSchedule(jobId, contractorUserId) {
     weatherInput: context.job.metadata?.weather || null
   });
 
+  const lookaheadAdjustment = adjustLookahead({
+    audit,
+    lookahead,
+    assignments: context.assignments || [],
+    recommendations
+  });
+
   return {
     readinessStatus,
     complianceWarnings,
     gaps,
     lookahead,
     tradeCoverage,
-    audit
+    audit,
+    lookaheadAdjustment
   };
 }

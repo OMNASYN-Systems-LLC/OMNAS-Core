@@ -10,6 +10,7 @@ export function JobDetailPage() {
   const [recommendations, setRecommendations] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [message, setMessage] = useState("");
+  const [appliedAdjustment, setAppliedAdjustment] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -60,6 +61,26 @@ export function JobDetailPage() {
     if (status === "GREEN") return "🟢";
     if (status === "YELLOW") return "🟡";
     return "🔴";
+  }
+
+
+  function renderWeekList(lookaheadSource) {
+    return (
+      <div className="gantt-grid">
+        <div className="gantt-row">
+          <strong>Week 1</strong>
+          <div className="gantt-bar week1">{(lookaheadSource?.week1 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+        </div>
+        <div className="gantt-row">
+          <strong>Week 2</strong>
+          <div className="gantt-bar week2">{(lookaheadSource?.week2 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+        </div>
+        <div className="gantt-row">
+          <strong>Week 3</strong>
+          <div className="gantt-bar week3">{(lookaheadSource?.week3 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+        </div>
+      </div>
+    );
   }
 
   function renderRecommendations() {
@@ -123,19 +144,23 @@ export function JobDetailPage() {
         </article>
 
         <h3>3-Week Lookahead</h3>
-        <div className="gantt-grid">
-          <div className="gantt-row">
-            <strong>Week 1</strong>
-            <div className="gantt-bar week1">{schedule.lookahead?.week1?.map((item) => item.category).join(", ") || "No planned trades"}</div>
-          </div>
-          <div className="gantt-row">
-            <strong>Week 2</strong>
-            <div className="gantt-bar week2">{schedule.lookahead?.week2?.map((item) => item.category).join(", ") || "No planned trades"}</div>
-          </div>
-          <div className="gantt-row">
-            <strong>Week 3</strong>
-            <div className="gantt-bar week3">{schedule.lookahead?.week3?.map((item) => item.category).join(", ") || "No planned trades"}</div>
-          </div>
+        {renderWeekList(appliedAdjustment ? schedule.lookaheadAdjustment?.adjustedLookahead : schedule.lookahead)}
+
+        <h3>Suggested Adjustment</h3>
+        <p className="message">Before vs After resequencing (rule-based)</p>
+        <div className="analysis-card">
+          <strong>Before</strong>
+          {renderWeekList(schedule.lookaheadAdjustment?.originalLookahead || schedule.lookahead)}
+          <strong>After</strong>
+          {renderWeekList(schedule.lookaheadAdjustment?.adjustedLookahead || schedule.lookahead)}
+          <ul>
+            {(schedule.lookaheadAdjustment?.adjustments || []).map((item, idx) => (
+              <li key={`${item.category}-${idx}`}>
+                <strong>{item.category}</strong> → {item.action} ({item.reason})
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => setAppliedAdjustment(true)}>Apply Adjustment</button>
         </div>
 
         <h3>Actual vs Planned</h3>
