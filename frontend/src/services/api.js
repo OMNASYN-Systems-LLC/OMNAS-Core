@@ -154,3 +154,11 @@ export function listReadyOpportunities(auth) {
 export function importOpportunityToJob(id, auth) {
   return request(`/opportunities/${id}/import`, { method: "POST", auth });
 }
+
+export function listEscalations(auth, status = "pending") {
+  return request(`/escalations?status=${encodeURIComponent(status)}`, { auth });
+}
+
+export function decideEscalation(id, payload, auth) {
+  return request(`/escalations/${id}/decision`, { method: "POST", payload, auth });
+}

@@ -6,6 +6,7 @@ import { LoginPage } from "../pages/LoginPage.jsx";
 import { MatchesPage } from "../pages/MatchesPage.jsx";
 import { JobDetailPage } from "../pages/JobDetailPage.jsx";
 import { OpportunitiesPage } from "../pages/OpportunitiesPage.jsx";
+import { PivotDashboardPage } from "../pages/PivotDashboardPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
 import { WorkerDashboardPage } from "../pages/WorkerDashboardPage.jsx";
 import { WorkerProfilePage } from "../pages/WorkerProfilePage.jsx";
@@ -54,6 +55,10 @@ export const router = createBrowserRouter([
       {
         path: "jobs/:jobId",
         element: <JobDetailPage />
+      },
+      {
+        path: "dashboard/pivot",
+        element: <PivotDashboardPage />
       }
     ]
   }

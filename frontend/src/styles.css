@@ -98,6 +98,29 @@ legend {
   padding: 0.75rem;
   margin-bottom: 0.75rem;
 }
+.status-green {
+  border-color: #3cb179;
+  background: rgba(60, 177, 121, 0.14);
+}
+
+.status-yellow {
+  border-color: #d1a52b;
+  background: rgba(209, 165, 43, 0.14);
+}
+
+.status-red {
+  border-color: #d64545;
+  background: rgba(214, 69, 69, 0.14);
+}
+
+.escalation-card {
+  margin-top: 0.75rem;
+}
+
+.decision-row {
+  display: flex;
+  gap: 0.5rem;
+}
 
 .severity-high {
   border-color: #d64545;

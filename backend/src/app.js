@@ -15,6 +15,7 @@ import { schedulingRouter } from "./modules/scheduling/routes.js";
 import { assignmentsRouter } from "./modules/assignments/routes.js";
 import { assignmentLogsRouter, logsRouter } from "./modules/logs/routes.js";
 import { opportunitiesRouter } from "./modules/opportunities/routes.js";
+import { escalationsRouter } from "./modules/escalations/routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
@@ -37,6 +38,7 @@ app.use("/api/assignments", assignmentsRouter);
 app.use("/api/assignments", assignmentLogsRouter);
 app.use("/api/logs", logsRouter);
 app.use("/api/opportunities", opportunitiesRouter);
+app.use("/api/escalations", escalationsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

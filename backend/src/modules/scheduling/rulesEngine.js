@@ -2,6 +2,7 @@ import rules from "./config/schedulingRules.json" with { type: "json" };
 import safetyExclusions from "./config/safetyExclusions.json" with { type: "json" };
 import zoningRules from "./config/zoningRules.json" with { type: "json" };
 import resolutionRules from "./config/resolutionRules.json" with { type: "json" };
+import escalationRules from "./config/escalationRules.json" with { type: "json" };
 
 function normalize(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -85,6 +86,99 @@ export function attemptDayResolution(task) {
     reason: "Fallback day move required",
     requiresApproval: true
   };
+}
+
+function toNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function isDustyTrade(task) {
+  const trade = toSafetyTrade(task?.safetyTrade || task?.trade || task?.category || "");
+  return (escalationRules.finish_protection?.restricted_trades || []).some((entry) => trade.includes(toSafetyTrade(entry)));
+}
+
+export function checkHardLock(taskA, taskB) {
+  const distRule = detectDistanceConflict(taskA, taskB);
+  if (!distRule) return { blocked: false, ruleTriggered: null, reason: null };
+
+  if (distRule.severity === "CRITICAL") {
+    return {
+      blocked: true,
+      ruleTriggered: "critical_distance_exclusion",
+      reason: `Critical separation breach for ${distRule.tradeA}/${distRule.tradeB}`
+    };
+  }
+
+  return { blocked: false, ruleTriggered: null, reason: null };
+}
+
+export function checkEscalationConditions(taskA, taskB, zone = {}) {
+  const thresholdA = escalationRules.near_critical_path?.float_consumption_threshold ?? 0.75;
+  const minFloat = escalationRules.near_critical_path?.min_float_remaining_days ?? 2;
+  const floatA = toNumber(taskA?.floatDays ?? taskA?.float_days, 0);
+  const floatB = toNumber(taskB?.floatDays ?? taskB?.float_days, 0);
+  const delayA = toNumber(taskA?.delayDays ?? taskA?.delay_days, 0);
+  const delayB = toNumber(taskB?.delayDays ?? taskB?.delay_days, 0);
+
+  if ((floatA > 0 && delayA > floatA * thresholdA) || (floatB > 0 && delayB > floatB * thresholdA) || (floatA > 0 && floatA <= minFloat) || (floatB > 0 && floatB <= minFloat)) {
+    return {
+      escalated: true,
+      ruleTriggered: "near_critical_path",
+      reason: "Float erosion near critical path threshold",
+      suggestedAction: "Superintendent review sequencing and recovery options"
+    };
+  }
+
+  const zoneSqFt = Math.max(1, toNumber(zone?.zone_sq_ft ?? zone?.sqFt ?? taskA?.zone_sq_ft ?? taskB?.zone_sq_ft, 400));
+  const workers = Math.max(1, toNumber(zone?.worker_count, toNumber(taskA?.crew, 1) + toNumber(taskB?.crew, 1)));
+  const ladderRequired = Boolean(taskA?.ladder_required || taskB?.ladder_required);
+  if (ladderRequired && zoneSqFt / workers < escalationRules.spatial_complexity?.min_sqft_per_worker) {
+    return {
+      escalated: true,
+      ruleTriggered: "spatial_complexity",
+      reason: "High ladder density in constrained workspace",
+      suggestedAction: "Manually stagger ladder trades and reduce concurrent headcount"
+    };
+  }
+
+  if (escalationRules.asset_overlap?.enable_swing_radius_check) {
+    const radiusA = toNumber(taskA?.swingRadiusFt ?? taskA?.radius_ft, 0);
+    const radiusB = toNumber(taskB?.swingRadiusFt ?? taskB?.radius_ft, 0);
+    const distanceBetween = toNumber(zone?.distance_between ?? taskA?.distance_between ?? taskB?.distance_between, taskA?.zone_id === taskB?.zone_id ? 10 : 50);
+    if (radiusA + radiusB > distanceBetween) {
+      return {
+        escalated: true,
+        ruleTriggered: "asset_overlap",
+        reason: "Equipment swing envelopes overlap",
+        suggestedAction: "Assign dedicated time windows for heavy equipment movement"
+      };
+    }
+  }
+
+  const finishStatus = toNumber(zone?.finish_status ?? zone?.finishStatus ?? taskA?.finish_status ?? taskB?.finish_status, 0);
+  const finishThreshold = escalationRules.finish_protection?.threshold ?? 0.85;
+  if (finishStatus > finishThreshold && (isDustyTrade(taskA) || isDustyTrade(taskB))) {
+    return {
+      escalated: true,
+      ruleTriggered: "finish_protection",
+      reason: "Dusty trade entering protected finish zone",
+      suggestedAction: "Require protection plan and superintendent approval before proceeding"
+    };
+  }
+
+  return { escalated: false, ruleTriggered: null, reason: null, suggestedAction: null };
+}
+
+export function resolveConflict(taskA, taskB, zone = {}) {
+  const { anchor, mover } = determineAnchorAndMover(taskA, taskB);
+  const shift = attemptShiftResolution(mover, zone);
+  if (shift) return { anchor, mover, resolution: shift };
+
+  const zoneMove = attemptZoneResolution(mover);
+  if (zoneMove) return { anchor, mover, resolution: zoneMove };
+
+  return { anchor, mover, resolution: attemptDayResolution(mover) };
 }
 
 export function checkDependencies(schedule, tasks) {
@@ -191,6 +285,10 @@ export function checkSafetyConflicts(schedule, zones = {}) {
   const spatialConflicts = [];
   const temporalConflicts = [];
   const zoneAnalysis = [];
+  const conflictsDetected = [];
+  const autoResolutions = [];
+  const manualOverridesRequired = [];
+  const escalations = [];
 
   for (const week of [1, 2, 3]) {
     const key = `week${week}`;
@@ -223,22 +321,99 @@ export function checkSafetyConflicts(schedule, zones = {}) {
         if (spatialOverlap) spatialConflicts.push({ taskAId: a.taskId, taskBId: b.taskId, tradeA: a.category, tradeB: b.category, zone: a.zone_id, time: `week${week}-${a.shift}` });
 
         if (!timeOverlap || !sameShift || !spatialOverlap) continue;
-        const distRule = detectDistanceConflict(a, b);
-        if (!distRule) continue;
 
-        const severity = distRule.severity;
-        const action = safetyExclusions.severity?.[severity]?.action || "ADVISE";
-        safetyConflicts.push({
+        const zoneMeta = zones[a.zone_id] || zones[a.category] || zones.default || {};
+        const conflict = {
           taskAId: a.taskId,
           taskBId: b.taskId,
-          tradeA: distRule.tradeA,
-          tradeB: distRule.tradeB,
-          severity,
-          action,
+          tradeA: a.category,
+          tradeB: b.category,
           zone: a.zone_id,
-          time: `${a.shift} week${week}`,
-          message: `Distance Risk: ${distRule.tradeA} requires ${distRule.min_distance_ft}ft separation`
-        });
+          time: `${a.shift} week${week}`
+        };
+
+        conflictsDetected.push(conflict);
+
+        const hardLock = checkHardLock(a, b);
+        if (hardLock.blocked) {
+          safetyConflicts.push({
+            ...conflict,
+            severity: "CRITICAL",
+            action: "BLOCK",
+            message: hardLock.reason
+          });
+          manualOverridesRequired.push({
+            ...conflict,
+            reason: hardLock.reason,
+            ruleTriggered: hardLock.ruleTriggered,
+            severity: "RED",
+            suggestedAction: "Manual superintendent override required"
+          });
+          continue;
+        }
+
+        const escalation = checkEscalationConditions(a, b, zoneMeta);
+        if (escalation.escalated) {
+          escalations.push({
+            taskId: a.taskId,
+            zone: a.zone_id,
+            reason: escalation.reason,
+            ruleTriggered: escalation.ruleTriggered,
+            severity: "AMBER",
+            suggestedAction: escalation.suggestedAction
+          });
+          escalations.push({
+            taskId: b.taskId,
+            zone: b.zone_id,
+            reason: escalation.reason,
+            ruleTriggered: escalation.ruleTriggered,
+            severity: "AMBER",
+            suggestedAction: escalation.suggestedAction
+          });
+          manualOverridesRequired.push({
+            ...conflict,
+            reason: escalation.reason,
+            ruleTriggered: escalation.ruleTriggered,
+            severity: "AMBER",
+            suggestedAction: escalation.suggestedAction
+          });
+          continue;
+        }
+
+        const distRule = detectDistanceConflict(a, b);
+        if (distRule) {
+          const severity = distRule.severity;
+          const action = safetyExclusions.severity?.[severity]?.action || "ADVISE";
+          safetyConflicts.push({
+            ...conflict,
+            tradeA: distRule.tradeA,
+            tradeB: distRule.tradeB,
+            severity,
+            action,
+            message: `Distance Risk: ${distRule.tradeA} requires ${distRule.min_distance_ft}ft separation`
+          });
+        }
+
+        const resolution = resolveConflict(a, b, zoneMeta);
+        if (resolution?.resolution?.requiresApproval) {
+          manualOverridesRequired.push({
+            ...conflict,
+            reason: resolution.resolution.reason,
+            ruleTriggered: resolution.resolution.action,
+            severity: "AMBER",
+            suggestedAction: "Review proposed date move before execution"
+          });
+        } else {
+          autoResolutions.push({
+            ...conflict,
+            taskId: resolution.mover.taskId,
+            reason: resolution.resolution.reason,
+            ruleTriggered: resolution.resolution.action,
+            severity: "GREEN",
+            suggestedAction: "Applied automatically",
+            to: resolution.resolution.to
+          });
+        }
       }
 
       const zoneKey = `${entries[i].zone_id}-${week}`;
@@ -256,6 +431,10 @@ export function checkSafetyConflicts(schedule, zones = {}) {
   }
 
   return {
+    conflictsDetected,
+    autoResolutions,
+    manualOverridesRequired,
+    escalations,
     safetyConflicts,
     spatialConflicts,
     temporalConflicts,

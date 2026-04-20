@@ -1,6 +1,7 @@
 import { assertNonNegativeInteger } from "../../utils/validation.js";
 import { getComplianceStatus, getTradeFit, normalizeTrade } from "../pca/taxonomy/tradeIntelligence.js";
 import { getJobRecommendations } from "../recommendations/service.js";
+import { queueEscalations } from "../escalations/service.js";
 import { getJobSchedulingContext } from "./repository.js";
 import { runFieldToPlanAudit } from "./audit.service.js";
 import { adjustLookahead } from "./adjustLookahead.service.js";
@@ -204,6 +205,29 @@ export async function getJobSchedule(jobId, contractorUserId) {
     logs: context.logs || [],
     jobMeta: context.job.metadata || {}
   });
+
+  const escalationEvents = [
+    ...(lookaheadAdjustment.escalations || []),
+    ...((lookaheadAdjustment.manualOverridesRequired || []).map((item) => ({
+      taskId: item.taskAId || item.taskId,
+      zone: item.zone,
+      reason: item.reason,
+      ruleTriggered: item.ruleTriggered || "manual_override",
+      severity: item.severity === "RED" ? "RED" : "AMBER",
+      suggestedAction: item.suggestedAction
+    }))),
+    ...((lookaheadAdjustment.autoResolutions || []).map((item) => ({
+      taskId: item.taskId,
+      zone: item.zone,
+      reason: item.reason,
+      ruleTriggered: item.ruleTriggered || "auto_resolution",
+      severity: "GREEN",
+      suggestedAction: item.suggestedAction,
+      status: "resolved"
+    })))
+  ];
+
+  await queueEscalations(escalationEvents);
 
   return {
     readinessStatus,

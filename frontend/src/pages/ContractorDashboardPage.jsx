@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { createJob, deleteJob, listJobs, listSkills } from "../services/api.js";
+import { createJob, deleteJob, listEscalations, listJobs, listSkills } from "../services/api.js";
 
 export function ContractorDashboardPage() {
   const auth = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
   const [skillsCatalog, setSkillsCatalog] = useState([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [pendingEscalations, setPendingEscalations] = useState(0);
   const [message, setMessage] = useState("");
   const [jobForm, setJobForm] = useState({
     organizationId: "00000000-0000-0000-0000-000000000010",
@@ -25,9 +26,10 @@ export function ContractorDashboardPage() {
 
   async function refresh() {
     try {
-      const [skillsResponse, jobsResponse] = await Promise.all([listSkills(auth), listJobs(auth)]);
+      const [skillsResponse, jobsResponse, escalationsResponse] = await Promise.all([listSkills(auth), listJobs(auth), listEscalations(auth, "pending")]);
       setSkillsCatalog(skillsResponse.data);
       setJobs(jobsResponse.data);
+      setPendingEscalations(escalationsResponse.data?.length || 0);
     } catch (error) {
       setMessage(error.message);
     }
@@ -84,6 +86,10 @@ export function ContractorDashboardPage() {
   return (
     <>
       <h1>Contractor Dashboard</h1>
+      <p className="message">
+        Superintendent Queue Badge: <strong>{pendingEscalations}</strong> pending escalations.{" "}
+        <Link to="/dashboard/pivot">Open Daily Pivot Dashboard</Link>
+      </p>
 
       <h2>Create Job</h2>
       <form onSubmit={handleCreateJob}>

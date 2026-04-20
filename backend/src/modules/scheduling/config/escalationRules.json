@@ -1,0 +1,17 @@
+{
+  "near_critical_path": {
+    "float_consumption_threshold": 0.75,
+    "min_float_remaining_days": 2
+  },
+  "spatial_complexity": {
+    "min_sqft_per_worker": 150,
+    "max_ladder_trades": 1
+  },
+  "asset_overlap": {
+    "enable_swing_radius_check": true
+  },
+  "finish_protection": {
+    "threshold": 0.85,
+    "restricted_trades": ["GRINDING", "CORE_DRILLING", "SAWCUTTING"]
+  }
+}
