@@ -6,7 +6,7 @@ export function AuthLayout() {
       <section className="auth-card">
         <nav>
           <Link to="/login">Login</Link> | <Link to="/register">Register</Link> | <Link to="/worker-profile">Worker Profile</Link> |{" "}
-          <Link to="/contractor-profile">Contractor Profile</Link>
+          <Link to="/contractor-profile">Contractor Profile</Link> | <Link to="/contractor-dashboard">Contractor Dashboard</Link>
         </nav>
         <Outlet />
       </section>

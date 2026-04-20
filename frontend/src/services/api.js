@@ -63,3 +63,23 @@ export function upsertContractorProfile(payload, auth) {
 export function getContractorProfile(auth) {
   return request("/contractors/profile", { auth });
 }
+
+export function createJob(payload, auth) {
+  return request("/jobs", { method: "POST", payload, auth });
+}
+
+export function listJobs(auth) {
+  return request("/jobs", { auth });
+}
+
+export function getJob(id, auth) {
+  return request(`/jobs/${id}`, { auth });
+}
+
+export function updateJob(id, payload, auth) {
+  return request(`/jobs/${id}`, { method: "PATCH", payload, auth });
+}
+
+export function deleteJob(id, auth) {
+  return request(`/jobs/${id}`, { method: "DELETE", auth });
+}

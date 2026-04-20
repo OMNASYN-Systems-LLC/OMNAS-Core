@@ -45,7 +45,8 @@ form {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
@@ -79,4 +80,14 @@ hr {
 
 ul {
   padding-left: 1.25rem;
+}
+
+fieldset {
+  border: 1px solid #333a45;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+legend {
+  padding: 0 0.35rem;
 }

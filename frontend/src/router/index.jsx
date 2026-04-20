@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { AuthLayout } from "../components/AuthLayout.jsx";
+import { ContractorDashboardPage } from "../pages/ContractorDashboardPage.jsx";
 import { ContractorProfilePage } from "../pages/ContractorProfilePage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       {
         path: "contractor-profile",
         element: <ContractorProfilePage />
+      },
+      {
+        path: "contractor-dashboard",
+        element: <ContractorDashboardPage />
       }
     ]
   }
