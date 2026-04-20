@@ -17,6 +17,7 @@ import { assignmentLogsRouter, logsRouter } from "./modules/logs/routes.js";
 import { opportunitiesRouter } from "./modules/opportunities/routes.js";
 import { escalationsRouter } from "./modules/escalations/routes.js";
 import { financialRouter } from "./modules/financial/financial.routes.js";
+import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
@@ -36,6 +37,7 @@ app.use("/api/jobs", recommendationsRouter);
 app.use("/api/jobs", schedulingRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/jobs", financialRouter);
+app.use("/api/jobs", analyticsRouter);
 app.use("/api/assignments", assignmentsRouter);
 app.use("/api/assignments", assignmentLogsRouter);
 app.use("/api/logs", logsRouter);

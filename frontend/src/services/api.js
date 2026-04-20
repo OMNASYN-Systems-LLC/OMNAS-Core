@@ -100,6 +100,10 @@ export function getJobErosion(id, auth) {
   return request(`/jobs/${id}/erosion`, { auth });
 }
 
+export function getJobCommand(id, auth) {
+  return request(`/jobs/${id}/command`, { auth });
+}
+
 
 export function createAssignment(payload, auth) {
   return request("/assignments", { method: "POST", payload, auth });

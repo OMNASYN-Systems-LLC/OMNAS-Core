@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { createAssignment, getJob, getJobRecommendations, getJobSchedule } from "../services/api.js";
+import { createAssignment, getJob, getJobCommand, getJobRecommendations, getJobSchedule } from "../services/api.js";
 
 export function JobDetailPage() {
   const { jobId } = useParams();
@@ -9,6 +9,7 @@ export function JobDetailPage() {
   const [job, setJob] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [schedule, setSchedule] = useState(null);
+  const [command, setCommand] = useState(null);
   const [message, setMessage] = useState("");
   const [appliedAdjustment, setAppliedAdjustment] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
@@ -18,15 +19,17 @@ export function JobDetailPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [jobResponse, recommendationResponse, scheduleResponse] = await Promise.all([
+        const [jobResponse, recommendationResponse, scheduleResponse, commandResponse] = await Promise.all([
           getJob(jobId, auth),
           getJobRecommendations(jobId, auth),
-          getJobSchedule(jobId, auth)
+          getJobSchedule(jobId, auth),
+          getJobCommand(jobId, auth)
         ]);
 
         setJob(jobResponse.data);
         setRecommendations(recommendationResponse.data.gapRecommendations || []);
         setSchedule(scheduleResponse.data);
+        setCommand(commandResponse.data || null);
         const hasCritical = (scheduleResponse.data?.lookaheadAdjustment?.safetyConflicts || []).some((c) => c.severity === "CRITICAL");
         setShowSafetyModal(hasCritical);
       } catch (error) {
@@ -273,6 +276,81 @@ export function JobDetailPage() {
     );
   }
 
+  function commandColor(status) {
+    if (status === "GREEN") return "status-green";
+    if (status === "YELLOW") return "status-yellow";
+    return "status-red";
+  }
+
+  function renderCommand() {
+    if (!command) {
+      return <p className="message">Command view unavailable.</p>;
+    }
+
+    return (
+      <section>
+        <article className={`analysis-card ${commandColor(command.health?.status)}`}>
+          <h2>Health Score: {command.health?.score ?? 0}</h2>
+          <p><strong>Status:</strong> {command.health?.status || "RED"}</p>
+          <p><strong>Project losing:</strong> ${Number(command.financial?.dailyLoss || 0).toLocaleString()}/day</p>
+        </article>
+
+        <article className="analysis-card status-red">
+          <h3>Financial Impact</h3>
+          <p>Daily Loss: ${Number(command.financial?.dailyLoss || 0).toLocaleString()}</p>
+          <p>Weekly Projection: ${Number(command.financial?.weeklyProjection || 0).toLocaleString()}</p>
+          <ul>
+            {(command.financial?.topDrivers || []).slice(0, 3).map((driver, idx) => (
+              <li key={`driver-${idx}`}>{driver.description} (${Number(driver.dailyImpactUsd || 0).toLocaleString()}/day)</li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="analysis-card status-yellow">
+          <h3>Execution Status</h3>
+          <p>Schedule Drift: {command.execution?.scheduleDriftDays || 0} days</p>
+          <p>Readiness: {command.execution?.readinessPercent || 0}%</p>
+          <p>Missing Work: {command.execution?.missingWorkCount || 0}</p>
+          <p>Delayed Trades: {command.execution?.delayedCategoriesCount || 0}</p>
+        </article>
+
+        <article className="analysis-card status-yellow">
+          <h3>Risks</h3>
+          <p>Escalations: {command.risks?.escalationsCount || 0}</p>
+          <p>Hard Locks: {command.risks?.hardLocksCount || 0}</p>
+          <p>Congestion Warnings: {command.risks?.congestionWarnings || 0}</p>
+          <p>Safety Flags: {command.risks?.safetyFlags || 0}</p>
+        </article>
+
+        <article className="analysis-card status-green">
+          <h3>Automation</h3>
+          <p>AI resolved {command.automation?.autoResolutionsCount || 0} issues.</p>
+          <p>{command.automation?.pendingOverridesCount || 0} decisions need approval.</p>
+          <p>{command.automation?.pendingEscalationsCount || 0} escalations pending.</p>
+        </article>
+
+        <article className="analysis-card status-red">
+          <h3>Forecast</h3>
+          <p>At current pace: +{command.forecast?.projectedDelayDays || 0} days delay</p>
+          <p>Projected loss: ${Number(command.forecast?.projectedLoss || 0).toLocaleString()}</p>
+        </article>
+
+        <article className="analysis-card status-yellow">
+          <h3>Action Queue</h3>
+          <ul>
+            {(command.actions || []).map((action, idx) => (
+              <li key={`action-${idx}`}>
+                <strong>{action.type}</strong> [{action.severity}] — {action.description}
+                <br />
+                Required: {action.requiredAction}
+              </li>
+            ))}
+          </ul>
+        </article>
+      </section>
+    );
+  }
+
   return (
     <>
       <h1>Job Detail #{jobId}</h1>
@@ -293,9 +371,10 @@ export function JobDetailPage() {
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <button type="button" onClick={() => setActiveTab("recommendations")}>Recommendations</button>
         <button type="button" onClick={() => setActiveTab("schedule")}>Schedule</button>
+        <button type="button" onClick={() => setActiveTab("command")}>Command</button>
       </div>
 
-      {activeTab === "recommendations" ? renderRecommendations() : renderSchedule()}
+      {activeTab === "recommendations" ? renderRecommendations() : activeTab === "schedule" ? renderSchedule() : renderCommand()}
 
       {showSafetyModal ? (
         <div className="analysis-card severity-high">
