@@ -5,6 +5,7 @@ import { ContractorProfilePage } from "../pages/ContractorProfilePage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
 import { MatchesPage } from "../pages/MatchesPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
+import { WorkerDashboardPage } from "../pages/WorkerDashboardPage.jsx";
 import { WorkerProfilePage } from "../pages/WorkerProfilePage.jsx";
 
 export const router = createBrowserRouter([
@@ -27,6 +28,10 @@ export const router = createBrowserRouter([
       {
         path: "worker-profile",
         element: <WorkerProfilePage />
+      },
+      {
+        path: "worker-dashboard",
+        element: <WorkerDashboardPage />
       },
       {
         path: "contractor-profile",

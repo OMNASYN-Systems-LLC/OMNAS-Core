@@ -54,6 +54,7 @@ Apply migrations in order:
 psql "$DATABASE_URL" -f backend/src/db/migrations/001_workforce_profiles.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/002_jobs.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/003_matching.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/004_assignments.sql
 ```
 
 Run apps:
@@ -87,6 +88,17 @@ Authentication is mocked via headers for local development:
 - `DELETE /api/jobs/:id` (contractor only)
 - `GET /api/jobs/:id/matches` (contractor only; computes + stores match scores)
 
+
+
+### Assignments endpoints
+- `POST /api/assignments` (contractor only; creates offered assignment)
+- `PATCH /api/assignments/:id/accept` (worker only)
+- `PATCH /api/assignments/:id/decline` (worker only)
+- `PATCH /api/assignments/:id/start` (worker only)
+- `PATCH /api/assignments/:id/complete` (worker/contractor if related)
+- `GET /api/assignments/:id`
+- `GET /api/assignments`
+
 ### Shared endpoints
 - `GET /api/skills`
 - `GET /api/health`
@@ -96,6 +108,7 @@ Authentication is mocked via headers for local development:
 - `/login`
 - `/register`
 - `/worker-profile`
+- `/worker-dashboard`
 - `/contractor-profile`
 - `/contractor-dashboard`
 - `/job-matches/:jobId`

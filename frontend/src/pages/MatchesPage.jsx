@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getJobMatches } from "../services/api.js";
+import { createAssignment, getJobMatches } from "../services/api.js";
 
 export function MatchesPage() {
   const { jobId } = useParams();
@@ -21,6 +21,15 @@ export function MatchesPage() {
     fetchMatches();
   }, [jobId]);
 
+  async function handleAssign(workerUserId) {
+    try {
+      await createAssignment({ jobId: Number(jobId), workerUserId }, auth);
+      setMessage("Assignment offer sent.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <>
       <h1>Job Matches: #{jobId}</h1>
@@ -36,6 +45,10 @@ export function MatchesPage() {
             Skills: {match.skills.map((skill) => `${skill.label} (${skill.proficiency}/5)`).join(", ") || "No skills"}
             <br />
             Breakdown: skill {match.score_breakdown.skill_score}, availability {match.score_breakdown.availability_score}, location {match.score_breakdown.location_score}, total {match.score_breakdown.total_score}
+            <br />
+            <button type="button" onClick={() => handleAssign(match.worker_user_id)}>
+              Assign Worker
+            </button>
           </li>
         ))}
       </ul>

@@ -87,3 +87,32 @@ export function deleteJob(id, auth) {
 export function getJobMatches(id, auth) {
   return request(`/jobs/${id}/matches`, { auth });
 }
+
+
+export function createAssignment(payload, auth) {
+  return request("/assignments", { method: "POST", payload, auth });
+}
+
+export function listAssignments(auth) {
+  return request("/assignments", { auth });
+}
+
+export function getAssignment(id, auth) {
+  return request(`/assignments/${id}`, { auth });
+}
+
+export function acceptAssignment(id, auth) {
+  return request(`/assignments/${id}/accept`, { method: "PATCH", auth });
+}
+
+export function declineAssignment(id, auth) {
+  return request(`/assignments/${id}/decline`, { method: "PATCH", auth });
+}
+
+export function startAssignment(id, auth) {
+  return request(`/assignments/${id}/start`, { method: "PATCH", auth });
+}
+
+export function completeAssignment(id, auth) {
+  return request(`/assignments/${id}/complete`, { method: "PATCH", auth });
+}

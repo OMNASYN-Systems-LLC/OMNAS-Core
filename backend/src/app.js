@@ -10,6 +10,7 @@ import { contractorRouter } from "./modules/contractors/routes.js";
 import { skillsRouter } from "./modules/skills/routes.js";
 import { jobsRouter } from "./modules/jobs/routes.js";
 import { matchingRouter } from "./modules/matching/routes.js";
+import { assignmentsRouter } from "./modules/assignments/routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
@@ -26,6 +27,7 @@ app.use("/api/contractors", contractorRouter);
 app.use("/api/skills", skillsRouter);
 app.use("/api/jobs", matchingRouter);
 app.use("/api/jobs", jobsRouter);
+app.use("/api/assignments", assignmentsRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
