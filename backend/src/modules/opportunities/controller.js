@@ -1,4 +1,10 @@
-import { enrichNormalizedOpportunities, ingestSamGovOpportunities, normalizeFetchedOpportunities } from "./service.js";
+import {
+  enrichNormalizedOpportunities,
+  getReadyOpportunities,
+  importOpportunityAsJob,
+  ingestSamGovOpportunities,
+  normalizeFetchedOpportunities
+} from "./service.js";
 
 export async function fetchOpportunitiesController(req, res, next) {
   try {
@@ -29,6 +35,25 @@ export async function enrichOpportunitiesController(_req, res, next) {
   try {
     const result = await enrichNormalizedOpportunities();
     return res.json({ success: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function listReadyOpportunitiesController(_req, res, next) {
+  try {
+    const opportunities = await getReadyOpportunities();
+    return res.json({ success: true, data: opportunities });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function importOpportunityController(req, res, next) {
+  try {
+    const id = Number.parseInt(req.params.id, 10);
+    const result = await importOpportunityAsJob(id, req.auth.userId);
+    return res.status(201).json({ success: true, data: result });
   } catch (error) {
     return next(error);
   }

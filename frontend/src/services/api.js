@@ -129,3 +129,12 @@ export function getAssignmentLogs(assignmentId, auth) {
 export function getLog(id, auth) {
   return request(`/logs/${id}`, { auth });
 }
+
+
+export function listReadyOpportunities(auth) {
+  return request("/opportunities/ready", { auth });
+}
+
+export function importOpportunityToJob(id, auth) {
+  return request(`/opportunities/${id}/import`, { method: "POST", auth });
+}

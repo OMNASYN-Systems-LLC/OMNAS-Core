@@ -4,6 +4,7 @@ import { ContractorDashboardPage } from "../pages/ContractorDashboardPage.jsx";
 import { ContractorProfilePage } from "../pages/ContractorProfilePage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
 import { MatchesPage } from "../pages/MatchesPage.jsx";
+import { OpportunitiesPage } from "../pages/OpportunitiesPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
 import { WorkerDashboardPage } from "../pages/WorkerDashboardPage.jsx";
 import { WorkerProfilePage } from "../pages/WorkerProfilePage.jsx";
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
       {
         path: "contractor-dashboard",
         element: <ContractorDashboardPage />
+      },
+      {
+        path: "opportunities",
+        element: <OpportunitiesPage />
       },
       {
         path: "job-matches/:jobId",

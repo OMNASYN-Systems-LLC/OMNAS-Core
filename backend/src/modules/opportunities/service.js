@@ -1,11 +1,15 @@
 import { fetchOpportunities } from "../../clients/samGovClient.js";
 import {
+  getOpportunityById,
+  importOpportunityToJob,
   listFetchedOpportunities,
   listNormalizedOpportunities,
+  listReadyOpportunities,
   updateOpportunityEnriched,
   updateOpportunityNormalized,
   upsertOpportunity
 } from "./repository.js";
+import { assertNonNegativeInteger } from "../../utils/validation.js";
 
 function toNull(value) {
   if (value === undefined || value === null) {
@@ -108,6 +112,24 @@ function enrichFromRaw(raw) {
   };
 }
 
+function mapPscToSkills(pscCode) {
+  const normalized = (pscCode || "").toUpperCase();
+
+  if (normalized.startsWith("Z1")) {
+    return [{ code: "maintenance", label: "Maintenance", category: "psc" }];
+  }
+
+  if (normalized.startsWith("Y1")) {
+    return [{ code: "construction", label: "Construction", category: "psc" }];
+  }
+
+  if (normalized.startsWith("C1")) {
+    return [{ code: "engineering_design", label: "Engineering / Design", category: "psc" }];
+  }
+
+  return [{ code: "general_contracting", label: "General Contracting", category: "psc" }];
+}
+
 export async function ingestSamGovOpportunities({ maxPages = 1, limit = 100 } = {}) {
   const saved = [];
 
@@ -187,4 +209,30 @@ export async function enrichNormalizedOpportunities() {
     errorCount: errors.length,
     errors
   };
+}
+
+export async function getReadyOpportunities() {
+  return listReadyOpportunities();
+}
+
+export async function importOpportunityAsJob(opportunityId, contractorUserId) {
+  assertNonNegativeInteger(opportunityId, "opportunityId");
+
+  const opportunity = await getOpportunityById(opportunityId);
+  if (!opportunity) {
+    const error = new Error("Opportunity not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (opportunity.status !== "ready") {
+    const error = new Error("Opportunity must be in ready status before import");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const mappedSkills = mapPscToSkills(opportunity.psc_code || opportunity.classification_code);
+  const job = await importOpportunityToJob(opportunity, contractorUserId, mappedSkills);
+
+  return { job, mappedSkills };
 }
