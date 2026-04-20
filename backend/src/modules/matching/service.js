@@ -1,4 +1,4 @@
-import { getJobWithRequirements, listWorkersForMatching, replaceMatchScores } from "./repository.js";
+import { getJobWithRequirements, listWorkerPerformance, listWorkersForMatching, replaceMatchScores } from "./repository.js";
 import { assertNonNegativeInteger } from "../../utils/validation.js";
 
 function round(value) {
@@ -11,7 +11,7 @@ function overlaps(aStart, aEnd, bStart, bEnd) {
 
 function computeSkillScore(requiredSkills, workerSkills) {
   if (requiredSkills.length === 0) {
-    return { skill_score: 0, proficiency_bonus: 0 };
+    return 0;
   }
 
   let totalWeight = 0;
@@ -30,13 +30,10 @@ function computeSkillScore(requiredSkills, workerSkills) {
     }
   }
 
-  const skillScore = totalWeight === 0 ? 0 : (matchedWeight / totalWeight) * 70;
-  const proficiencyBonus = totalWeight === 0 ? 0 : (proficiencyAccumulator / totalWeight) * 20;
+  const coverage = totalWeight === 0 ? 0 : matchedWeight / totalWeight;
+  const proficiency = totalWeight === 0 ? 0 : proficiencyAccumulator / totalWeight;
 
-  return {
-    skill_score: round(skillScore),
-    proficiency_bonus: round(proficiencyBonus)
-  };
+  return round(coverage * 55 + proficiency * 20);
 }
 
 function computeAvailabilityScore(job, availabilityWindows) {
@@ -54,6 +51,31 @@ function computeLocationScore(job, worker) {
   return job.site_zip && worker.home_zip && job.site_zip === worker.home_zip ? 10 : 0;
 }
 
+function computePerformanceScore(performance) {
+  const totalAssignments = Number(performance?.total_assignments ?? 0);
+  const totalCompleted = Number(performance?.total_jobs_completed ?? 0);
+  const totalHours = Number(performance?.total_hours_logged ?? 0);
+  const avgHours = Number(performance?.avg_hours_per_day ?? 0);
+  const stddev = Number(performance?.hours_stddev ?? 0);
+  const logsCount = Number(performance?.logs_count ?? 0);
+
+  const completionRate = totalAssignments > 0 ? totalCompleted / totalAssignments : 0;
+  const consistency = Math.max(0, 1 - stddev / 8);
+  const logReliability = totalAssignments > 0 ? Math.min(1, logsCount / totalAssignments) : 0;
+
+  const score = completionRate * 12 + consistency * 4 + logReliability * 4;
+
+  return {
+    performance_score: round(score),
+    metrics: {
+      total_jobs_completed: totalCompleted,
+      total_hours_logged: round(totalHours),
+      completion_rate: round(completionRate),
+      avg_hours_per_day: round(avgHours)
+    }
+  };
+}
+
 export async function getJobMatches(jobId, contractorUserId) {
   assertNonNegativeInteger(jobId, "jobId");
 
@@ -65,15 +87,26 @@ export async function getJobMatches(jobId, contractorUserId) {
   }
 
   const { workers, workerSkills, workerAvailability } = await listWorkersForMatching();
+  const performanceRows = await listWorkerPerformance();
+  const perfByWorker = new Map();
+
+  for (const row of performanceRows.assignments) {
+    perfByWorker.set(row.worker_user_id, { ...row });
+  }
+
+  for (const row of performanceRows.hours) {
+    perfByWorker.set(row.worker_user_id, { ...(perfByWorker.get(row.worker_user_id) || {}), ...row });
+  }
 
   const matches = workers.map((worker) => {
     const skills = workerSkills.filter((item) => item.worker_user_id === worker.user_id);
     const availability = workerAvailability.filter((item) => item.worker_user_id === worker.user_id);
 
-    const { skill_score, proficiency_bonus } = computeSkillScore(job.requiredSkills, skills);
+    const skill_score = computeSkillScore(job.requiredSkills, skills);
     const availability_score = computeAvailabilityScore(job, availability);
     const location_score = computeLocationScore(job, worker);
-    const total_score = round(skill_score + proficiency_bonus + availability_score + location_score);
+    const { performance_score, metrics } = computePerformanceScore(perfByWorker.get(worker.user_id));
+    const total_score = round(skill_score + availability_score + location_score + performance_score);
 
     return {
       worker_user_id: worker.user_id,
@@ -87,12 +120,15 @@ export async function getJobMatches(jobId, contractorUserId) {
         years: skill.years,
         verified: skill.verified
       })),
+      performance: metrics,
       score: total_score,
       total_score,
+      performance_score,
       score_breakdown: {
         skill_score,
         availability_score,
         location_score,
+        performance_score,
         total_score
       }
     };

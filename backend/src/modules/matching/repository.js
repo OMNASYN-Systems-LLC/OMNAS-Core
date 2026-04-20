@@ -50,6 +50,34 @@ export async function listWorkersForMatching() {
   };
 }
 
+export async function listWorkerPerformance() {
+  const assignmentsQuery = `
+    SELECT worker_user_id,
+           COUNT(*)::INT AS total_assignments,
+           COUNT(*) FILTER (WHERE status = 'completed')::INT AS total_jobs_completed
+    FROM assignments
+    GROUP BY worker_user_id
+  `;
+
+  const hoursQuery = `
+    SELECT a.worker_user_id,
+           COALESCE(SUM(dl.hours_worked), 0)::FLOAT AS total_hours_logged,
+           COALESCE(AVG(dl.hours_worked), 0)::FLOAT AS avg_hours_per_day,
+           COALESCE(STDDEV_POP(dl.hours_worked), 0)::FLOAT AS hours_stddev,
+           COUNT(dl.id)::INT AS logs_count
+    FROM assignments a
+    LEFT JOIN daily_logs dl ON dl.assignment_id = a.id
+    GROUP BY a.worker_user_id
+  `;
+
+  const [assignmentsRes, hoursRes] = await Promise.all([db.query(assignmentsQuery), db.query(hoursQuery)]);
+
+  return {
+    assignments: assignmentsRes.rows,
+    hours: hoursRes.rows
+  };
+}
+
 export async function replaceMatchScores(jobId, matches) {
   const client = await db.connect();
 
@@ -58,12 +86,18 @@ export async function replaceMatchScores(jobId, matches) {
     await client.query("DELETE FROM match_scores WHERE job_id = $1", [jobId]);
 
     const insertQuery = `
-      INSERT INTO match_scores (job_id, worker_user_id, score, score_breakdown)
-      VALUES ($1, $2, $3, $4::jsonb)
+      INSERT INTO match_scores (job_id, worker_user_id, score, performance_score, score_breakdown)
+      VALUES ($1, $2, $3, $4, $5::jsonb)
     `;
 
     for (const match of matches) {
-      await client.query(insertQuery, [jobId, match.worker_user_id, match.total_score, JSON.stringify(match.score_breakdown)]);
+      await client.query(insertQuery, [
+        jobId,
+        match.worker_user_id,
+        match.total_score,
+        match.performance_score,
+        JSON.stringify(match.score_breakdown)
+      ]);
     }
 
     await client.query("COMMIT");

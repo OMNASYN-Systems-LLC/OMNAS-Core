@@ -60,6 +60,7 @@ psql "$DATABASE_URL" -f backend/src/db/migrations/006_opportunities.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/007_opportunities_normalized_fields.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/008_opportunities_enrichment_fields.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/009_opportunity_import_jobs.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/010_match_scores_performance.sql
 ```
 
 Run apps:
@@ -91,7 +92,7 @@ Authentication is mocked via headers for local development:
 - `GET /api/jobs/:id`
 - `PATCH /api/jobs/:id` (contractor only)
 - `DELETE /api/jobs/:id` (contractor only)
-- `GET /api/jobs/:id/matches` (contractor only; computes + stores match scores)
+- `GET /api/jobs/:id/matches` (contractor only; computes + stores match scores including performance_score)
 
 
 
