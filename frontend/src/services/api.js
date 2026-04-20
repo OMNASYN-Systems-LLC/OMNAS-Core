@@ -83,3 +83,7 @@ export function updateJob(id, payload, auth) {
 export function deleteJob(id, auth) {
   return request(`/jobs/${id}`, { method: "DELETE", auth });
 }
+
+export function getJobMatches(id, auth) {
+  return request(`/jobs/${id}/matches`, { auth });
+}

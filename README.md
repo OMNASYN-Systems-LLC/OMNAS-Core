@@ -53,6 +53,7 @@ Apply migrations in order:
 ```bash
 psql "$DATABASE_URL" -f backend/src/db/migrations/001_workforce_profiles.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/002_jobs.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/003_matching.sql
 ```
 
 Run apps:
@@ -84,6 +85,7 @@ Authentication is mocked via headers for local development:
 - `GET /api/jobs/:id`
 - `PATCH /api/jobs/:id` (contractor only)
 - `DELETE /api/jobs/:id` (contractor only)
+- `GET /api/jobs/:id/matches` (contractor only; computes + stores match scores)
 
 ### Shared endpoints
 - `GET /api/skills`
@@ -96,3 +98,4 @@ Authentication is mocked via headers for local development:
 - `/worker-profile`
 - `/contractor-profile`
 - `/contractor-dashboard`
+- `/job-matches/:jobId`

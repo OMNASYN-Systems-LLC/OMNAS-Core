@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { createJob, deleteJob, listJobs, listSkills } from "../services/api.js";
 
 export function ContractorDashboardPage() {
@@ -120,6 +121,7 @@ export function ContractorDashboardPage() {
         {jobs.map((job) => (
           <li key={job.id}>
             <strong>{job.title}</strong> — {job.status} — starts {new Date(job.starts_at).toLocaleString()} — skills: {job.skill_count}
+            <Link to={`/job-matches/${job.id}`} style={{ marginLeft: "0.5rem" }}>View Matches</Link>
             <button type="button" onClick={() => handleDeleteJob(job.id)} style={{ marginLeft: "0.5rem" }}>
               Delete
             </button>
