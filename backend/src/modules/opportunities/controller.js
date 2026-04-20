@@ -1,4 +1,4 @@
-import { ingestSamGovOpportunities } from "./service.js";
+import { ingestSamGovOpportunities, normalizeFetchedOpportunities } from "./service.js";
 
 export async function fetchOpportunitiesController(req, res, next) {
   try {
@@ -11,6 +11,15 @@ export async function fetchOpportunitiesController(req, res, next) {
     });
 
     return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function normalizeOpportunitiesController(_req, res, next) {
+  try {
+    const result = await normalizeFetchedOpportunities();
+    return res.json({ success: true, data: result });
   } catch (error) {
     return next(error);
   }

@@ -1,5 +1,17 @@
 import { fetchOpportunities } from "../../clients/samGovClient.js";
-import { upsertOpportunity } from "./repository.js";
+import { listFetchedOpportunities, updateOpportunityNormalized, upsertOpportunity } from "./repository.js";
+
+function toNull(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "string" && value.trim().toLowerCase() === "null") {
+    return null;
+  }
+
+  return value;
+}
 
 function normalizeRecord(record) {
   return {
@@ -30,6 +42,37 @@ function extractItems(payload) {
   return [];
 }
 
+function buildAgency(parts) {
+  return parts.filter(Boolean).join(" / ") || null;
+}
+
+function normalizeFromRaw(raw) {
+  const safe = raw || {};
+  const pop = safe.placeOfPerformance || {};
+  const city = pop.city || {};
+  const state = pop.state || {};
+
+  return {
+    title: toNull(safe.title),
+    department: toNull(safe.department),
+    subTier: toNull(safe.subTier),
+    office: toNull(safe.office),
+    agency: buildAgency([toNull(safe.department), toNull(safe.subTier), toNull(safe.office)]),
+    naicsCode: toNull(safe.naicsCode),
+    solicitationNumber: toNull(safe.solicitationNumber),
+    noticeType: toNull(safe.baseType ?? safe.type),
+    postedDate: toNull(safe.postedDate),
+    responseDeadline: toNull(safe.responseDeadLine),
+    descriptionUrl: toNull(safe.description),
+    popCity: toNull(city.name),
+    popState: toNull(state.code),
+    popZip: toNull(pop.zip),
+    setAsideCode: toNull(safe.typeOfSetAside),
+    classificationCode: toNull(safe.classificationCode),
+    uiLink: toNull(safe.uiLink)
+  };
+}
+
 export async function ingestSamGovOpportunities({ maxPages = 1, limit = 100 } = {}) {
   const saved = [];
 
@@ -56,5 +99,31 @@ export async function ingestSamGovOpportunities({ maxPages = 1, limit = 100 } = 
   return {
     fetchedCount: saved.length,
     opportunities: saved
+  };
+}
+
+export async function normalizeFetchedOpportunities() {
+  const fetched = await listFetchedOpportunities();
+  const normalized = [];
+  const errors = [];
+
+  for (const opportunity of fetched) {
+    try {
+      const mapped = normalizeFromRaw(opportunity.raw_json);
+      const row = await updateOpportunityNormalized(opportunity.id, mapped);
+      if (row) {
+        normalized.push(row);
+      }
+    } catch (error) {
+      console.error("Failed to normalize opportunity", opportunity.id, error);
+      errors.push({ id: opportunity.id, message: error.message });
+    }
+  }
+
+  return {
+    processed: fetched.length,
+    normalizedCount: normalized.length,
+    errorCount: errors.length,
+    errors
   };
 }

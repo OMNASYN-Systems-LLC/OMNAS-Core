@@ -32,3 +32,58 @@ export async function upsertOpportunity(opportunity) {
 
   return rows[0];
 }
+
+export async function listFetchedOpportunities() {
+  const { rows } = await db.query("SELECT * FROM opportunities WHERE status = 'fetched' ORDER BY created_at ASC");
+  return rows;
+}
+
+export async function updateOpportunityNormalized(id, normalized) {
+  const query = `
+    UPDATE opportunities SET
+      title = $2,
+      department = $3,
+      sub_tier = $4,
+      office = $5,
+      agency = $6,
+      naics_code = $7,
+      solicitation_number = $8,
+      notice_type = $9,
+      posted_date = $10,
+      response_deadline = $11,
+      description_url = $12,
+      pop_city = $13,
+      pop_state = $14,
+      pop_zip = $15,
+      set_aside_code = $16,
+      classification_code = $17,
+      ui_link = $18,
+      status = 'normalized',
+      updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const { rows } = await db.query(query, [
+    id,
+    normalized.title,
+    normalized.department,
+    normalized.subTier,
+    normalized.office,
+    normalized.agency,
+    normalized.naicsCode,
+    normalized.solicitationNumber,
+    normalized.noticeType,
+    normalized.postedDate,
+    normalized.responseDeadline,
+    normalized.descriptionUrl,
+    normalized.popCity,
+    normalized.popState,
+    normalized.popZip,
+    normalized.setAsideCode,
+    normalized.classificationCode,
+    normalized.uiLink
+  ]);
+
+  return rows[0] ?? null;
+}
