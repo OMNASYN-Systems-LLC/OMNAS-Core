@@ -56,6 +56,7 @@ psql "$DATABASE_URL" -f backend/src/db/migrations/002_jobs.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/003_matching.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/004_assignments.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/005_daily_logs.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/006_opportunities.sql
 ```
 
 Run apps:
@@ -104,6 +105,9 @@ Authentication is mocked via headers for local development:
 - `POST /api/assignments/:id/logs` (worker only; assignment must be accepted/active)
 - `GET /api/assignments/:id/logs`
 - `GET /api/logs/:id`
+
+### Opportunities endpoints
+- `POST /api/opportunities/fetch` (contractor only; fetches from SAM.gov and stores raw records with status `fetched`)
 
 ### Shared endpoints
 - `GET /api/skills`

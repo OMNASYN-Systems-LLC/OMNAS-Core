@@ -1,0 +1,17 @@
+import { ingestSamGovOpportunities } from "./service.js";
+
+export async function fetchOpportunitiesController(req, res, next) {
+  try {
+    const maxPages = Number.parseInt(req.body?.maxPages ?? 1, 10);
+    const limit = Number.parseInt(req.body?.limit ?? 100, 10);
+
+    const result = await ingestSamGovOpportunities({
+      maxPages: Number.isNaN(maxPages) ? 1 : maxPages,
+      limit: Number.isNaN(limit) ? 100 : limit
+    });
+
+    return res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+}
