@@ -96,6 +96,10 @@ export function getJobSchedule(id, auth) {
   return request(`/jobs/${id}/schedule`, { auth });
 }
 
+export function getJobErosion(id, auth) {
+  return request(`/jobs/${id}/erosion`, { auth });
+}
+
 
 export function createAssignment(payload, auth) {
   return request("/assignments", { method: "POST", payload, auth });
