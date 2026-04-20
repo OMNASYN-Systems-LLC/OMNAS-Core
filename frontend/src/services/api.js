@@ -116,3 +116,16 @@ export function startAssignment(id, auth) {
 export function completeAssignment(id, auth) {
   return request(`/assignments/${id}/complete`, { method: "PATCH", auth });
 }
+
+
+export function submitDailyLog(assignmentId, payload, auth) {
+  return request(`/assignments/${assignmentId}/logs`, { method: "POST", payload, auth });
+}
+
+export function getAssignmentLogs(assignmentId, auth) {
+  return request(`/assignments/${assignmentId}/logs`, { auth });
+}
+
+export function getLog(id, auth) {
+  return request(`/logs/${id}`, { auth });
+}

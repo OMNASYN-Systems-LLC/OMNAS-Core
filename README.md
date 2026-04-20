@@ -55,6 +55,7 @@ psql "$DATABASE_URL" -f backend/src/db/migrations/001_workforce_profiles.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/002_jobs.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/003_matching.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/004_assignments.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/005_daily_logs.sql
 ```
 
 Run apps:
@@ -98,6 +99,11 @@ Authentication is mocked via headers for local development:
 - `PATCH /api/assignments/:id/complete` (worker/contractor if related)
 - `GET /api/assignments/:id`
 - `GET /api/assignments`
+
+### Daily logs endpoints
+- `POST /api/assignments/:id/logs` (worker only; assignment must be accepted/active)
+- `GET /api/assignments/:id/logs`
+- `GET /api/logs/:id`
 
 ### Shared endpoints
 - `GET /api/skills`
