@@ -1,7 +1,12 @@
 import rules from "./config/schedulingRules.json" with { type: "json" };
+import safetyExclusions from "./config/safetyExclusions.json" with { type: "json" };
 
 function normalize(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function toSafetyTrade(value) {
+  return normalize(value).toUpperCase();
 }
 
 function findWeek(schedule, category) {
@@ -85,4 +90,56 @@ export function computeEffectiveProductivity(baseRate, weatherMultiplier, conges
 export function getMaxCrewThreshold(category) {
   const c = normalize(category);
   return rules.congestion.max_crews[c] || rules.congestion.max_crews.default || 5;
+}
+
+export function checkSafetyConflicts(schedule, zones = {}) {
+  const safetyConflicts = [];
+
+  for (const week of [1, 2, 3]) {
+    const key = `week${week}`;
+    const entries = schedule[key] || [];
+
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        const a = entries[i];
+        const b = entries[j];
+
+        const zoneA = a.zone || zones[a.category] || "SITE";
+        const zoneB = b.zone || zones[b.category] || "SITE";
+        if (zoneA !== zoneB) {
+          continue;
+        }
+
+        const tradeA = toSafetyTrade(a.safetyTrade || a.category);
+        const tradeB = toSafetyTrade(b.safetyTrade || b.category);
+
+        const match = (safetyExclusions.conflicts || []).find((rule) => {
+          const t1 = toSafetyTrade(rule.trades[0]);
+          const t2 = toSafetyTrade(rule.trades[1]);
+          return (tradeA === t1 && tradeB === t2) || (tradeA === t2 && tradeB === t1);
+        });
+
+        if (!match) {
+          continue;
+        }
+
+        const severity = match.severity;
+        const action = safetyExclusions.severity?.[severity]?.action || "ADVISE";
+
+        safetyConflicts.push({
+          tradeA,
+          tradeB,
+          severity,
+          action,
+          zone: zoneA,
+          time: `week${week}`
+        });
+      }
+    }
+  }
+
+  return {
+    safetyConflicts,
+    hasCritical: safetyConflicts.some((item) => item.severity === "CRITICAL")
+  };
 }

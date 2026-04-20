@@ -1,0 +1,13 @@
+{
+  "severity": {
+    "CRITICAL": { "action": "BLOCK" },
+    "HIGH": { "action": "WARN" },
+    "MEDIUM": { "action": "ADVISE" }
+  },
+  "conflicts": [
+    { "trades": ["WELDING", "PAINTING"], "severity": "CRITICAL" },
+    { "trades": ["OVERHEAD_WORK", "FLOOR_WORK"], "severity": "CRITICAL" },
+    { "trades": ["DEMO", "FINISHES"], "severity": "HIGH" },
+    { "trades": ["DRYWALL_SANDING", "HVAC_TESTING"], "severity": "MEDIUM" }
+  ]
+}

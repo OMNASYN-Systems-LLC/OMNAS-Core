@@ -3,6 +3,7 @@ import {
   applyCongestion,
   applyFatigue,
   checkDependencies,
+  checkSafetyConflicts,
   computeEffectiveProductivity,
   getMaxCrewThreshold
 } from "./rulesEngine.js";
@@ -140,6 +141,8 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
     week3: cloneWeekEntries(lookahead?.week3)
   };
 
+  const safetyCheck = checkSafetyConflicts(adjusted, jobMeta.zones || {});
+
   const adjustments = [];
   const congestionWarnings = [];
   const fatigueWarnings = [];
@@ -204,6 +207,22 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
   const dependencyWarnings = dependencyResult.dependencyWarnings;
   const blockedCategories = dependencyResult.blockedCategories;
 
+  if (safetyCheck.hasCritical) {
+    return {
+      originalLookahead,
+      adjustedLookahead: originalLookahead,
+      adjustments: [],
+      capacityAnalysis: [],
+      dependencyWarnings: [],
+      congestionWarnings: [],
+      fatigueWarnings: [],
+      productivityFactors: [],
+      safetyConflicts: safetyCheck.safetyConflicts,
+      blocked: true,
+      error: `Cannot schedule ${safetyCheck.safetyConflicts[0].tradeA} and ${safetyCheck.safetyConflicts[0].tradeB} in same zone.`
+    };
+  }
+
   const capacityMap = new Map(capacityAnalysis.map((item) => [item.category, item]));
 
   for (const auditItem of audit?.categoryAudits || []) {
@@ -264,6 +283,8 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
     dependencyWarnings,
     congestionWarnings,
     fatigueWarnings,
-    productivityFactors
+    productivityFactors,
+    safetyConflicts: safetyCheck.safetyConflicts,
+    blocked: false
   };
 }

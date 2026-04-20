@@ -11,6 +11,7 @@ export function JobDetailPage() {
   const [schedule, setSchedule] = useState(null);
   const [message, setMessage] = useState("");
   const [appliedAdjustment, setAppliedAdjustment] = useState(false);
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -24,6 +25,8 @@ export function JobDetailPage() {
         setJob(jobResponse.data);
         setRecommendations(recommendationResponse.data.gapRecommendations || []);
         setSchedule(scheduleResponse.data);
+        const hasCritical = (scheduleResponse.data?.lookaheadAdjustment?.safetyConflicts || []).some((c) => c.severity === "CRITICAL");
+        setShowSafetyModal(hasCritical);
       } catch (error) {
         setMessage(error.message);
       }
@@ -63,6 +66,13 @@ export function JobDetailPage() {
     return "🔴";
   }
 
+
+
+  function safetyColor(severity) {
+    if (severity === "CRITICAL") return "#ff6b6b";
+    if (severity === "HIGH") return "#ff9f43";
+    return "#f6e58d";
+  }
 
   function renderWeekList(lookaheadSource) {
     return (
@@ -160,7 +170,7 @@ export function JobDetailPage() {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={() => setAppliedAdjustment(true)}>Apply Adjustment</button>
+          <button type="button" onClick={() => setAppliedAdjustment(true)} disabled={schedule.lookaheadAdjustment?.blocked}>Apply Adjustment</button>
         </div>
 
 
@@ -194,6 +204,19 @@ export function JobDetailPage() {
         <ul>
           {(schedule.lookaheadAdjustment?.fatigueWarnings || schedule.audit?.fatigueWarnings || []).map((item, idx) => (
             <li key={`fat-${idx}`} title="Fatigue: >50 hrs/week">🟠 {item.category || item.workerId}: {item.message}</li>
+          ))}
+        </ul>
+
+        <h3>Safety Conflicts</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.safetyConflicts || []).map((item, idx) => (
+            <li
+              key={`safe-${idx}`}
+              title={`Conflict exists because ${item.tradeA} and ${item.tradeB} overlap in ${item.zone} during ${item.time}.`}
+              style={{ color: safetyColor(item.severity) }}
+            >
+              {item.severity} ({item.action}): {item.tradeA} vs {item.tradeB} in {item.zone} ({item.time})
+            </li>
           ))}
         </ul>
 
@@ -246,6 +269,22 @@ export function JobDetailPage() {
       </div>
 
       {activeTab === "recommendations" ? renderRecommendations() : renderSchedule()}
+
+      {showSafetyModal ? (
+        <div className="analysis-card severity-high">
+          <h3>Safety Conflict</h3>
+          <p>{schedule?.lookaheadAdjustment?.error || "Cannot schedule conflicting trades in same zone."}</p>
+          <button type="button" onClick={() => setShowSafetyModal(false)}>Cancel</button>
+          <button
+            type="button"
+            onClick={() => setShowSafetyModal(false)}
+            disabled={auth.role !== "contractor"}
+            style={{ marginLeft: "0.5rem" }}
+          >
+            Override
+          </button>
+        </div>
+      ) : null}
 
       {message ? <p className="message">{message}</p> : null}
     </>
