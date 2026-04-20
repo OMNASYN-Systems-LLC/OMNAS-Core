@@ -199,7 +199,8 @@ export async function getJobSchedule(jobId, contractorUserId) {
     audit,
     lookahead,
     assignments: context.assignments || [],
-    recommendations
+    recommendations,
+    weatherSource: context.job.metadata?.weather || null
   });
 
   return {

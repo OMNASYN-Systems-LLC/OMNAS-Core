@@ -1,0 +1,10 @@
+{
+  "drywall": { "rate_per_worker_hr": 60 },
+  "electrical": { "rate_per_worker_hr": 22 },
+  "concrete": { "rate_per_worker_hr": 0.6 },
+  "roofing": { "rate_per_worker_hr": 0.55 },
+  "sitework": { "rate_per_worker_hr": 1.2 },
+  "plumbing": { "rate_per_worker_hr": 1.0 },
+  "hvac": { "rate_per_worker_hr": 0.9 },
+  "finishes": { "rate_per_worker_hr": 2.0 }
+}

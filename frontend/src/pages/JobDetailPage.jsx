@@ -163,6 +163,16 @@ export function JobDetailPage() {
           <button type="button" onClick={() => setAppliedAdjustment(true)}>Apply Adjustment</button>
         </div>
 
+
+        <h3>Capacity vs Required Work</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.capacityAnalysis || []).map((item) => (
+            <li key={`cap-${item.category}`}>
+              <strong>{item.category}</strong>: workers {item.workers}, capacity {item.capacity}, required {item.requiredWork}, weather-adjusted x{item.weatherMultiplier}, duration {item.adjustedDuration} day(s)
+            </li>
+          ))}
+        </ul>
+
         <h3>Actual vs Planned</h3>
         <ul>
           {(schedule.audit?.categoryAudits || []).map((item) => (
