@@ -129,6 +129,23 @@ function computeActualProgress(logsForCategory, category) {
   return clamp((workUnits / TOTAL_EXPECTED_WORK) * 100, 0, 100);
 }
 
+
+function buildFatigueWarnings(logs) {
+  const byWorker = new Map();
+  for (const log of logs || []) {
+    const key = log.worker_user_id || "unknown";
+    byWorker.set(key, (byWorker.get(key) || 0) + Number(log.hours_worked || 0));
+  }
+
+  const warnings = [];
+  for (const [workerId, hours] of byWorker.entries()) {
+    if (hours > 50) {
+      warnings.push({ workerId, message: "Fatigue: >50 hrs/week (OVERTIME_FATIGUE)" });
+    }
+  }
+  return warnings;
+}
+
 export function runFieldToPlanAudit({ jobId, schedule, logs, assignments, pcaCategories, weatherInput }) {
   const plannedItems = inferPlannedItems(schedule.lookahead);
   const baselineDate = schedule?.jobStartsAt || new Date().toISOString();
@@ -186,6 +203,17 @@ export function runFieldToPlanAudit({ jobId, schedule, logs, assignments, pcaCat
     };
   });
 
+  const productivityFactors = categoryAudits.map((item) => ({
+    category: item.category,
+    crewSize: logs.filter((log) => detectLogCategory(log, item.category)).reduce((sum, log) => sum + Number(log.crew_size || 1), 0),
+    occupancyRatio: null,
+    congestionFactor: null,
+    fatigueFactor: 1,
+    effectiveProductivity: Number((item.adjustedExpectedProgress / 100).toFixed(2))
+  }));
+
+  const fatigueWarnings = buildFatigueWarnings(logs);
+
   const weatherImpact = {
     source: weatherInput || logs.find((log) => log.weather)?.weather || null,
     affectedCategories: categoryAudits
@@ -200,6 +228,10 @@ export function runFieldToPlanAudit({ jobId, schedule, logs, assignments, pcaCat
     },
     categoryAudits,
     weatherImpact,
+    fatigueWarnings,
+    dependencyWarnings: [],
+    congestionWarnings: [],
+    productivityFactors,
     pcaCategories: pcaCategories.map((item) => item.category)
   };
 }

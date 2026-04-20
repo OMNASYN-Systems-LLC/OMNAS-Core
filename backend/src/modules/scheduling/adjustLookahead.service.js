@@ -1,4 +1,11 @@
 import productionRates from "../../config/productionRates.json" with { type: "json" };
+import {
+  applyCongestion,
+  applyFatigue,
+  checkDependencies,
+  computeEffectiveProductivity,
+  getMaxCrewThreshold
+} from "./rulesEngine.js";
 
 const DEFAULT_REQUIRED_WORK = {
   drywall: 1800,
@@ -87,15 +94,26 @@ function getRequiredWork(category) {
   return DEFAULT_REQUIRED_WORK[normalized] || DEFAULT_REQUIRED_WORK.default;
 }
 
-function getWorkerCount(assignments, category) {
+function getWorkerStats(assignments, logs, category) {
   const normalized = normalizeCategory(category);
-
-  const count = assignments.filter((assignment) => {
+  const workers = assignments.filter((assignment) => {
     const trade = normalizeCategory(assignment.trade_primary);
     return trade === normalized || trade.includes(normalized) || normalized.includes(trade);
-  }).length;
+  });
 
-  return Math.max(1, count);
+  const workerIds = new Set(workers.map((item) => item.worker_user_id));
+  let weeklyHours = 0;
+  for (const log of logs || []) {
+    if (workerIds.has(log.worker_user_id)) {
+      weeklyHours += Number(log.hours_worked || 0);
+    }
+  }
+
+  return {
+    workerCount: Math.max(1, workers.length),
+    weeklyHours,
+    crewSize: Math.max(1, workers.length)
+  };
 }
 
 function capacityRebalance(weeks, adjustments, maxPerWeek = 3) {
@@ -104,16 +122,12 @@ function capacityRebalance(weeks, adjustments, maxPerWeek = 3) {
     while (weeks[key].length > maxPerWeek) {
       const shifted = weeks[key].pop();
       addToWeek(weeks, week + 1, shifted);
-      adjustments.push({
-        category: shifted.category,
-        action: "DELAYED",
-        reason: "capacity_rebalance"
-      });
+      adjustments.push({ category: shifted.category, action: "DELAYED", reason: "capacity_rebalance" });
     }
   }
 }
 
-export function adjustLookahead({ audit, lookahead, assignments, recommendations, weatherSource }) {
+export function adjustLookahead({ audit, lookahead, assignments, recommendations, weatherSource, logs = [], jobMeta = {} }) {
   const originalLookahead = {
     week1: cloneWeekEntries(lookahead?.week1),
     week2: cloneWeekEntries(lookahead?.week2),
@@ -127,19 +141,58 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
   };
 
   const adjustments = [];
+  const congestionWarnings = [];
+  const fatigueWarnings = [];
   const recMap = new Map((recommendations?.gapRecommendations || []).map((gap) => [gap.category, gap.topRecommendations?.[0] || null]));
 
+  const productivityFactors = [];
+
   const capacityAnalysis = (audit?.categoryAudits || []).map((auditItem) => {
-    const workers = getWorkerCount(assignments || [], auditItem.category);
-    const rate = getRatePerWorkerHour(auditItem.category);
+    const stats = getWorkerStats(assignments || [], logs, auditItem.category);
+    const baseRate = getRatePerWorkerHour(auditItem.category);
     const weatherMultiplier = getWeatherMultiplierForTrade(auditItem.category, weatherSource || audit?.weatherImpact?.source);
-    const capacity = Number((workers * rate * 8 * weatherMultiplier).toFixed(2));
+
+    const zoneSqFt = Number(jobMeta.zoneSqFt || jobMeta.siteSqFt || 2000);
+    const congestion = applyCongestion({
+      totalWorkers: stats.workerCount,
+      zoneSqFt
+    });
+
+    const fatigue = applyFatigue(stats.weeklyHours);
+
+    const maxCrew = getMaxCrewThreshold(auditItem.category);
+    let crewPenalty = 1;
+    if (stats.crewSize > maxCrew) {
+      crewPenalty = 0.8;
+      congestionWarnings.push({ category: auditItem.category, message: "CREW_OVERSTACK" });
+    }
+
+    const effectiveProductivity = computeEffectiveProductivity(
+      baseRate,
+      weatherMultiplier,
+      congestion.congestionFactor * crewPenalty,
+      fatigue.fatigueFactor
+    );
+
+    const capacity = Number((stats.workerCount * effectiveProductivity * 8).toFixed(2));
     const requiredWork = getRequiredWork(auditItem.category);
     const adjustedDuration = capacity <= 0 ? 5 : Math.max(1, Math.ceil(requiredWork / capacity));
 
+    congestionWarnings.push(...congestion.congestionWarnings.map((message) => ({ category: auditItem.category, message })));
+    fatigueWarnings.push(...fatigue.fatigueWarnings.map((message) => ({ category: auditItem.category, message: `${message} (OVERTIME_FATIGUE)` })));
+
+    productivityFactors.push({
+      category: auditItem.category,
+      crewSize: stats.crewSize,
+      occupancyRatio: congestion.occupancyRatio,
+      congestionFactor: Number((congestion.congestionFactor * crewPenalty).toFixed(2)),
+      fatigueFactor: fatigue.fatigueFactor,
+      effectiveProductivity
+    });
+
     return {
       category: auditItem.category,
-      workers,
+      workers: stats.workerCount,
       capacity,
       requiredWork,
       weatherMultiplier,
@@ -147,11 +200,22 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
     };
   });
 
+  const dependencyResult = checkDependencies(adjusted, audit?.categoryAudits || []);
+  const dependencyWarnings = dependencyResult.dependencyWarnings;
+  const blockedCategories = dependencyResult.blockedCategories;
+
   const capacityMap = new Map(capacityAnalysis.map((item) => [item.category, item]));
 
   for (const auditItem of audit?.categoryAudits || []) {
     const currentWeek = findWeekForCategory(adjusted, auditItem.category) || auditItem.plannedWeek || 1;
     const cap = capacityMap.get(auditItem.category);
+
+    if (blockedCategories.has(normalizeCategory(auditItem.category))) {
+      removeCategoryFromWeeks(adjusted, auditItem.category);
+      addToWeek(adjusted, Math.min(3, currentWeek + 1), { category: auditItem.category, source: "dependency_blocked" });
+      adjustments.push({ category: auditItem.category, action: "DELAYED", reason: "hard_dependency_blocked" });
+      continue;
+    }
 
     if (auditItem.status === "RED") {
       removeCategoryFromWeeks(adjusted, auditItem.category);
@@ -196,6 +260,10 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
     originalLookahead,
     adjustedLookahead: adjusted,
     adjustments,
-    capacityAnalysis
+    capacityAnalysis,
+    dependencyWarnings,
+    congestionWarnings,
+    fatigueWarnings,
+    productivityFactors
   };
 }

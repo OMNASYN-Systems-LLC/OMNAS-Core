@@ -173,6 +173,30 @@ export function JobDetailPage() {
           ))}
         </ul>
 
+
+        <h3>Dependency Warnings</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.dependencyWarnings || schedule.audit?.dependencyWarnings || []).map((item, idx) => (
+            <li key={`dep-${idx}`} title={item.message}>
+              {item.type === "hard" ? "⛔" : "⚠️"} {item.category}: {item.message}
+            </li>
+          ))}
+        </ul>
+
+        <h3>Congestion / Trade Stacking</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.congestionWarnings || schedule.audit?.congestionWarnings || []).map((item, idx) => (
+            <li key={`con-${idx}`} title="Congested: >200 SF per worker">⚠️ {item.category}: {item.message}</li>
+          ))}
+        </ul>
+
+        <h3>Fatigue Indicators</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.fatigueWarnings || schedule.audit?.fatigueWarnings || []).map((item, idx) => (
+            <li key={`fat-${idx}`} title="Fatigue: >50 hrs/week">🟠 {item.category || item.workerId}: {item.message}</li>
+          ))}
+        </ul>
+
         <h3>Actual vs Planned</h3>
         <ul>
           {(schedule.audit?.categoryAudits || []).map((item) => (

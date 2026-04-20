@@ -200,7 +200,9 @@ export async function getJobSchedule(jobId, contractorUserId) {
     lookahead,
     assignments: context.assignments || [],
     recommendations,
-    weatherSource: context.job.metadata?.weather || null
+    weatherSource: context.job.metadata?.weather || null,
+    logs: context.logs || [],
+    jobMeta: context.job.metadata || {}
   });
 
   return {
