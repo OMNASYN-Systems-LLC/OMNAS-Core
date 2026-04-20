@@ -218,8 +218,11 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
       fatigueWarnings: [],
       productivityFactors: [],
       safetyConflicts: safetyCheck.safetyConflicts,
+      spatialConflicts: safetyCheck.spatialConflicts,
+      temporalConflicts: safetyCheck.temporalConflicts,
+      zoneAnalysis: safetyCheck.zoneAnalysis,
       blocked: true,
-      error: `Cannot schedule ${safetyCheck.safetyConflicts[0].tradeA} and ${safetyCheck.safetyConflicts[0].tradeB} in same zone.`
+      error: `Cannot schedule ${safetyCheck.safetyConflicts[0].tradeA} and ${safetyCheck.safetyConflicts[0].tradeB} in same zone ${safetyCheck.safetyConflicts[0].zone} during ${safetyCheck.safetyConflicts[0].time}.`
     };
   }
 
@@ -285,6 +288,9 @@ export function adjustLookahead({ audit, lookahead, assignments, recommendations
     fatigueWarnings,
     productivityFactors,
     safetyConflicts: safetyCheck.safetyConflicts,
+    spatialConflicts: safetyCheck.spatialConflicts,
+    temporalConflicts: safetyCheck.temporalConflicts,
+    zoneAnalysis: safetyCheck.zoneAnalysis,
     blocked: false
   };
 }

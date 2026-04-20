@@ -12,6 +12,8 @@ export function JobDetailPage() {
   const [message, setMessage] = useState("");
   const [appliedAdjustment, setAppliedAdjustment] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [zoneView, setZoneView] = useState("ROOM");
+  const [shiftView, setShiftView] = useState("ALL");
 
   useEffect(() => {
     async function load() {
@@ -79,15 +81,15 @@ export function JobDetailPage() {
       <div className="gantt-grid">
         <div className="gantt-row">
           <strong>Week 1</strong>
-          <div className="gantt-bar week1">{(lookaheadSource?.week1 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+          <div className="gantt-bar week1">{(lookaheadSource?.week1 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
         </div>
         <div className="gantt-row">
           <strong>Week 2</strong>
-          <div className="gantt-bar week2">{(lookaheadSource?.week2 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+          <div className="gantt-bar week2">{(lookaheadSource?.week2 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
         </div>
         <div className="gantt-row">
           <strong>Week 3</strong>
-          <div className="gantt-bar week3">{(lookaheadSource?.week3 || []).map((item) => item.category).join(", ") || "No planned trades"}</div>
+          <div className="gantt-bar week3">{(lookaheadSource?.week3 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
         </div>
       </div>
     );
@@ -139,6 +141,21 @@ export function JobDetailPage() {
     return (
       <section>
         <h2>Schedule</h2>
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
+          <label>Zone View
+            <select value={zoneView} onChange={(e) => setZoneView(e.target.value)}>
+              <option value="ROOM">Room</option>
+              <option value="FLOOR">Floor</option>
+            </select>
+          </label>
+          <label>Shift View
+            <select value={shiftView} onChange={(e) => setShiftView(e.target.value)}>
+              <option value="ALL">All</option>
+              <option value="AM">AM</option>
+              <option value="PM">PM</option>
+            </select>
+          </label>
+        </div>
 
         <article className={`analysis-card ${readinessClass}`}>
           <h3>Readiness Status: {schedule.readinessStatus}</h3>
@@ -220,6 +237,16 @@ export function JobDetailPage() {
           ))}
         </ul>
 
+        <h3>Zone/Time Conflict Visualization</h3>
+        <ul>
+          {(schedule.lookaheadAdjustment?.spatialConflicts || []).map((item, idx) => (
+            <li key={`sp-${idx}`}>Zone conflict: {item.tradeA} vs {item.tradeB} in {item.zone} ({item.time})</li>
+          ))}
+          {(schedule.lookaheadAdjustment?.temporalConflicts || []).map((item, idx) => (
+            <li key={`tm-${idx}`}>Time conflict: {item.tradeA} vs {item.tradeB} ({item.time})</li>
+          ))}
+        </ul>
+
         <h3>Actual vs Planned</h3>
         <ul>
           {(schedule.audit?.categoryAudits || []).map((item) => (
@@ -274,6 +301,9 @@ export function JobDetailPage() {
         <div className="analysis-card severity-high">
           <h3>Safety Conflict</h3>
           <p>{schedule?.lookaheadAdjustment?.error || "Cannot schedule conflicting trades in same zone."}</p>
+          <p className="message">Conflict occurs in Zone: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.zone || "N/A"}</p>
+          <p className="message">Time: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.time || "N/A"}</p>
+          <p className="message">Distance Risk: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.message || "Trade separation rule triggered."}</p>
           <button type="button" onClick={() => setShowSafetyModal(false)}>Cancel</button>
           <button
             type="button"
