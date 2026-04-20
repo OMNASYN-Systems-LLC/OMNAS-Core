@@ -4,10 +4,11 @@ export function AuthLayout() {
   return (
     <div className="app-shell">
       <section className="auth-card">
+        <nav>
+          <Link to="/login">Login</Link> | <Link to="/register">Register</Link> | <Link to="/worker-profile">Worker Profile</Link> |{" "}
+          <Link to="/contractor-profile">Contractor Profile</Link>
+        </nav>
         <Outlet />
-        <p>
-          <Link to="/login">Login</Link> | <Link to="/register">Register</Link>
-        </p>
       </section>
     </div>
   );

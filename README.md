@@ -11,10 +11,14 @@ OMNAS-Core/
 ├── backend/
 │   ├── src/
 │   │   ├── config/
-│   │   ├── controllers/
+│   │   ├── db/migrations/
 │   │   ├── middleware/
+│   │   ├── modules/
+│   │   │   ├── workers/
+│   │   │   ├── contractors/
+│   │   │   └── skills/
 │   │   ├── routes/
-│   │   ├── services/
+│   │   ├── utils/
 │   │   ├── app.js
 │   │   └── server.js
 │   ├── .env.example
@@ -51,8 +55,6 @@ cd ../frontend && npm install
 
 ### 2) Configure environment variables
 
-Create `.env` files from examples:
-
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
@@ -60,7 +62,15 @@ cp frontend/.env.example frontend/.env
 
 Set `DATABASE_URL` in `backend/.env` to your PostgreSQL instance.
 
-### 3) Run development servers
+### 3) Run database migration
+
+Apply:
+
+```bash
+psql "$DATABASE_URL" -f backend/src/db/migrations/001_workforce_profiles.sql
+```
+
+### 4) Run development servers
 
 In terminal 1:
 
@@ -76,21 +86,31 @@ cd frontend
 npm run dev
 ```
 
-- Frontend: `http://localhost:5173`
-- Backend: `http://localhost:4000`
-- Health endpoint: `GET http://localhost:4000/api/health`
+## Workforce API
 
-## Available API Endpoints
+Authentication is mocked via headers for local development:
+- `x-user-id: <uuid>`
+- `x-user-role: worker | contractor`
 
-- `POST /api/auth/register`
-  - body: `{ "name": "...", "email": "...", "password": "..." }`
-- `POST /api/auth/login`
-  - body: `{ "email": "...", "password": "..." }`
+### Worker endpoints (`x-user-role: worker`)
+- `PUT /api/workers/profile`
+- `GET /api/workers/profile`
+- `POST /api/workers/skills`
+- `DELETE /api/workers/skills/:skillId`
+
+### Contractor endpoints (`x-user-role: contractor`)
+- `PUT /api/contractors/profile`
+- `GET /api/contractors/profile`
+
+### Shared endpoints
+- `GET /api/skills`
 - `GET /api/health`
 
-## Production Notes
+## Frontend Pages
 
-- Environment variables are validated on startup.
-- Security middleware includes `helmet`, `cors`, and request logging.
-- Backend code is organized by config/routes/controllers/services for scalability.
-- Frontend is route-driven and API calls are isolated in a service module.
+- `/login`
+- `/register`
+- `/worker-profile`
+- `/contractor-profile`
+
+The worker profile page includes add/remove skill UI fed by `GET /api/skills`.
