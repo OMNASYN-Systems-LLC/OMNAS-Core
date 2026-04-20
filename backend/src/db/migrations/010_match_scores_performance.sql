@@ -1,0 +1,2 @@
+ALTER TABLE match_scores
+  ADD COLUMN IF NOT EXISTS performance_score NUMERIC(6,2) NOT NULL DEFAULT 0;
