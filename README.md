@@ -58,6 +58,7 @@ psql "$DATABASE_URL" -f backend/src/db/migrations/004_assignments.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/005_daily_logs.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/006_opportunities.sql
 psql "$DATABASE_URL" -f backend/src/db/migrations/007_opportunities_normalized_fields.sql
+psql "$DATABASE_URL" -f backend/src/db/migrations/008_opportunities_enrichment_fields.sql
 ```
 
 Run apps:
@@ -110,6 +111,7 @@ Authentication is mocked via headers for local development:
 ### Opportunities endpoints
 - `POST /api/opportunities/fetch` (contractor only; fetches from SAM.gov and stores raw records with status `fetched`)
 - `POST /api/opportunities/normalize` (contractor only; normalizes `fetched` records from `raw_json`, sets status to `normalized`)
+- `POST /api/opportunities/enrich` (contractor only; enriches `normalized` records from `raw_json`, sets status to `ready`)
 
 ### Shared endpoints
 - `GET /api/skills`

@@ -38,6 +38,11 @@ export async function listFetchedOpportunities() {
   return rows;
 }
 
+export async function listNormalizedOpportunities() {
+  const { rows } = await db.query("SELECT * FROM opportunities WHERE status = 'normalized' ORDER BY updated_at ASC");
+  return rows;
+}
+
 export async function updateOpportunityNormalized(id, normalized) {
   const query = `
     UPDATE opportunities SET
@@ -83,6 +88,28 @@ export async function updateOpportunityNormalized(id, normalized) {
     normalized.setAsideCode,
     normalized.classificationCode,
     normalized.uiLink
+  ]);
+
+  return rows[0] ?? null;
+}
+
+export async function updateOpportunityEnriched(id, enriched) {
+  const query = `
+    UPDATE opportunities SET
+      psc_code = $2,
+      attachments = $3::jsonb,
+      wage_determination = $4,
+      status = 'ready',
+      updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const { rows } = await db.query(query, [
+    id,
+    enriched.pscCode,
+    JSON.stringify(enriched.attachments),
+    enriched.wageDetermination
   ]);
 
   return rows[0] ?? null;

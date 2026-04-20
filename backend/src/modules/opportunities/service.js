@@ -1,5 +1,11 @@
 import { fetchOpportunities } from "../../clients/samGovClient.js";
-import { listFetchedOpportunities, updateOpportunityNormalized, upsertOpportunity } from "./repository.js";
+import {
+  listFetchedOpportunities,
+  listNormalizedOpportunities,
+  updateOpportunityEnriched,
+  updateOpportunityNormalized,
+  upsertOpportunity
+} from "./repository.js";
 
 function toNull(value) {
   if (value === undefined || value === null) {
@@ -73,6 +79,35 @@ function normalizeFromRaw(raw) {
   };
 }
 
+function enrichFromRaw(raw) {
+  const safe = raw || {};
+  const rawLinks = Array.isArray(safe.resourceLinks) ? safe.resourceLinks : [];
+
+  const attachments = rawLinks
+    .map((link) => {
+      if (typeof link === "string") {
+        return { url: toNull(link), filename: null, type: null };
+      }
+
+      if (link && typeof link === "object") {
+        return {
+          url: toNull(link.url ?? link.href ?? link.link),
+          filename: toNull(link.filename ?? link.name ?? null),
+          type: toNull(link.type ?? link.mimeType ?? null)
+        };
+      }
+
+      return null;
+    })
+    .filter((item) => item && item.url);
+
+  return {
+    pscCode: toNull(safe.classificationCode),
+    attachments,
+    wageDetermination: toNull(safe.wageDeterminationNumber)
+  };
+}
+
 export async function ingestSamGovOpportunities({ maxPages = 1, limit = 100 } = {}) {
   const saved = [];
 
@@ -123,6 +158,32 @@ export async function normalizeFetchedOpportunities() {
   return {
     processed: fetched.length,
     normalizedCount: normalized.length,
+    errorCount: errors.length,
+    errors
+  };
+}
+
+export async function enrichNormalizedOpportunities() {
+  const normalizedRows = await listNormalizedOpportunities();
+  const enriched = [];
+  const errors = [];
+
+  for (const opportunity of normalizedRows) {
+    try {
+      const mapped = enrichFromRaw(opportunity.raw_json);
+      const row = await updateOpportunityEnriched(opportunity.id, mapped);
+      if (row) {
+        enriched.push(row);
+      }
+    } catch (error) {
+      console.error("Failed to enrich opportunity", opportunity.id, error);
+      errors.push({ id: opportunity.id, message: error.message });
+    }
+  }
+
+  return {
+    processed: normalizedRows.length,
+    enrichedCount: enriched.length,
     errorCount: errors.length,
     errors
   };

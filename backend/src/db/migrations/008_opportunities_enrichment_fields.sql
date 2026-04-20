@@ -1,0 +1,4 @@
+ALTER TABLE opportunities
+  ADD COLUMN IF NOT EXISTS psc_code VARCHAR(128),
+  ADD COLUMN IF NOT EXISTS attachments JSONB,
+  ADD COLUMN IF NOT EXISTS wage_determination VARCHAR(128);
