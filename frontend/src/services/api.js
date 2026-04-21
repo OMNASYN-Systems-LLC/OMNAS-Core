@@ -88,6 +88,10 @@ export function getJobMatches(id, auth) {
   return request(`/jobs/${id}/matches`, { auth });
 }
 
+export function getJobCommand(id, auth) {
+  return request(`/jobs/${id}/command`, { auth });
+}
+
 
 export function createAssignment(payload, auth) {
   return request("/assignments", { method: "POST", payload, auth });
