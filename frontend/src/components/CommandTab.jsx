@@ -5,7 +5,7 @@ const TONE = {
   yellow: "#eab308",
   orange: "#f97316",
   red: "#ef4444",
-  neutral: "#64748b"
+  neutral: "#64748b",
 };
 
 function toneFor(metric, value) {
@@ -21,16 +21,16 @@ function toneFor(metric, value) {
       if (n <= 3) return "yellow";
       return "red";
     case "confidence":
-      if (n >= 85) return "green";
-      if (n >= 70) return "yellow";
+      if (n >= 80) return "green";
+      if (n >= 60) return "yellow";
       return "red";
     case "readiness":
       if (n >= 90) return "green";
       if (n >= 60) return "yellow";
       return "red";
     case "production":
-      if (n >= 90) return "green";
-      if (n >= 70) return "yellow";
+      if (n >= 0) return "green";
+      if (n >= -20) return "yellow";
       return "red";
     case "conflicts":
       if (n === 0) return "green";
@@ -49,45 +49,36 @@ function formatCurrency(value, { compact = false } = {}) {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-    notation: compact ? "compact" : "standard"
+    notation: compact ? "compact" : "standard",
   });
 }
 
-function plainScheduleStatus(driftDays, phase) {
-  if (driftDays === 0) return "On Plan";
-  if (phase === "not-started") return `${driftDays}d late to start`;
-  if (phase === "overrun") return `${driftDays}d past completion`;
-  return `${driftDays}d behind plan`;
-}
-
 function plainConfidence(score) {
-  if (score >= 85) return "Likely to hit deadline";
-  if (score >= 70) return "Tight — needs attention";
+  if (score >= 80) return "Likely to hit deadline";
+  if (score >= 60) return "Tight — needs attention";
   return "Unlikely to hit deadline";
 }
 
-function HeroStrip({ command }) {
-  const dailyLoss = command.financial?.dailyLoss ?? 0;
-  const weeklyLoss = command.financial?.weeklyProjection ?? 0;
-  const drift = command.execution?.scheduleDriftDays ?? 0;
-  const phase = command.execution?.phase;
-  const confidence = command.health?.score ?? 0;
-  const topDriver = command.financial?.topDrivers?.[0];
+function HeroStrip({ dashboard }) {
+  const profitLoss = dashboard.hero?.profitLoss ?? null;
+  const scheduleRisk = dashboard.hero?.scheduleRisk ?? null;
+  const confidence = dashboard.confidence?.score ?? 0;
 
-  const lossTone = toneFor("loss", dailyLoss);
-  const driftTone = toneFor("drift", drift);
+  const lossTone = toneFor("loss", profitLoss ?? 0);
+  const driftTone = toneFor("drift", scheduleRisk ?? 0);
   const confTone = toneFor("confidence", confidence);
+  const topDriver = dashboard.cause?.[0];
 
   return (
     <section className="hero-strip">
       <div
         className={`hero-cell hero-loss tone-${lossTone}`}
-        aria-label={`Profit loss ${formatCurrency(dailyLoss)} per day`}
+        aria-label={`Profit impact ${formatCurrency(profitLoss)} per day`}
       >
-        <div className="hero-loss-value">{formatCurrency(dailyLoss)}</div>
+        <div className="hero-loss-value">{profitLoss !== null ? formatCurrency(profitLoss) : "—"}</div>
         <div className="hero-loss-unit">per day</div>
         <div className="hero-loss-sub">
-          {weeklyLoss > 0 ? `${formatCurrency(weeklyLoss)} this week` : "On budget this week"}
+          {profitLoss ? "Estimated daily impact" : "No tracked loss"}
         </div>
         {topDriver ? (
           <div className="hero-loss-driver">Driven by {topDriver.label.toLowerCase()}</div>
@@ -96,8 +87,12 @@ function HeroStrip({ command }) {
 
       <div className={`hero-cell tone-${driftTone}`}>
         <div className="hero-secondary-label">Schedule Risk</div>
-        <div className="hero-secondary-value">{drift === 0 ? "On Plan" : `+${drift}d`}</div>
-        <div className="hero-secondary-sub">{plainScheduleStatus(drift, phase)}</div>
+        <div className="hero-secondary-value">
+          {scheduleRisk !== null ? `+${scheduleRisk}d` : "On Plan"}
+        </div>
+        <div className="hero-secondary-sub">
+          {scheduleRisk ? `${scheduleRisk}d behind plan` : "Tracking to schedule"}
+        </div>
       </div>
 
       <div className={`hero-cell tone-${confTone}`}>
@@ -109,13 +104,13 @@ function HeroStrip({ command }) {
   );
 }
 
-function CausePanel({ drivers }) {
-  const top = (drivers ?? []).slice(0, 3);
+function CausePanel({ cause }) {
+  const top = (cause ?? []).slice(0, 3);
   return (
     <section className="dash-panel">
       <header className="dash-panel-header">
-        <h3>Why we're losing money</h3>
-        <span className="dash-panel-sub">Top {top.length || 0} drivers</span>
+        <h3>Why we&apos;re losing money</h3>
+        <span className="dash-panel-sub">Top {top.length} driver(s)</span>
       </header>
       {top.length === 0 ? (
         <p className="dash-empty">No material loss drivers detected.</p>
@@ -125,7 +120,11 @@ function CausePanel({ drivers }) {
             <li key={idx} className="cause-row">
               <span className="cause-rank">{idx + 1}</span>
               <span className="cause-label">{d.label}</span>
-              <span className="cause-impact">{formatCurrency(d.impact)}/day</span>
+              {d.impact !== null ? (
+                <span className="cause-impact">{formatCurrency(d.impact)}/day</span>
+              ) : (
+                <span className="cause-impact">—</span>
+              )}
               <span className="cause-why">{d.metric}</span>
             </li>
           ))}
@@ -135,10 +134,10 @@ function CausePanel({ drivers }) {
   );
 }
 
-function ActionPanel({ actions }) {
-  const list = actions ?? [];
-  const approvals = list.filter((a) => a.priority === "high");
-  const recommendations = list.filter((a) => a.priority !== "high" && a.id !== "all-clear");
+function ActionPanel({ action }) {
+  const list = action ?? [];
+  const urgent = list.filter((a) => ["high", "critical"].includes(a.priority));
+  const suggested = list.filter((a) => !["high", "critical"].includes(a.priority) && a.id !== "all-clear");
   const allClear = list.length === 1 && list[0].id === "all-clear";
 
   if (allClear) {
@@ -160,11 +159,11 @@ function ActionPanel({ actions }) {
       <div className="action-grid">
         <div className="action-col">
           <div className="action-col-title">System recommends</div>
-          {recommendations.length === 0 ? (
+          {suggested.length === 0 ? (
             <p className="dash-empty">No recommendations.</p>
           ) : (
             <ul className="action-list">
-              {recommendations.map((a) => (
+              {suggested.map((a) => (
                 <li key={a.id} className="action-item">
                   <span className="action-text">{a.label}</span>
                   {a.cta ? <ActionButton action={a} variant="ghost" /> : null}
@@ -175,11 +174,11 @@ function ActionPanel({ actions }) {
         </div>
         <div className="action-col action-col-approval">
           <div className="action-col-title">Needs your approval</div>
-          {approvals.length === 0 ? (
+          {urgent.length === 0 ? (
             <p className="dash-empty">No pending approvals.</p>
           ) : (
             <ul className="action-list">
-              {approvals.map((a) => (
+              {urgent.map((a) => (
                 <li key={a.id} className="action-item action-item-urgent">
                   <span className="action-text">{a.label}</span>
                   {a.cta ? <ActionButton action={a} variant="primary" /> : null}
@@ -201,17 +200,19 @@ function ActionButton({ action, variant }) {
       </Link>
     );
   }
-  return <span className={`action-btn action-btn-${variant} action-btn-disabled`}>{action.cta}</span>;
+  return (
+    <span className={`action-btn action-btn-${variant} action-btn-disabled`}>
+      {action.cta}
+    </span>
+  );
 }
 
 function ExecutionPanel({ execution }) {
-  const readiness = execution?.readinessPercent ?? 0;
-  const required = execution?.requiredSlots ?? 0;
-  const accepted = execution?.acceptedCount ?? 0;
+  const active = execution?.activeAssignments ?? 0;
   const conflicts = execution?.conflicts ?? 0;
-  const productionPct = required > 0 ? Math.round((accepted / required) * 100) : 0;
-  const readyTone = toneFor("readiness", readiness);
-  const prodTone = toneFor("production", productionPct);
+  const delta = execution?.productionDelta ?? null;
+
+  const prodTone = toneFor("production", delta ?? 0);
   const confTone = toneFor("conflicts", conflicts);
 
   return (
@@ -221,27 +222,25 @@ function ExecutionPanel({ execution }) {
       </header>
       <div className="exec-row">
         <div className="exec-tile">
-          <div className="exec-tile-label">Zone Readiness</div>
-          <div className={`exec-tile-value tone-text-${readyTone}`}>{readiness}%</div>
-          <div className="exec-bar">
-            <div className={`exec-bar-fill tone-bg-${readyTone}`} style={{ width: `${readiness}%` }} />
-          </div>
-          <div className="exec-tile-sub">{accepted} of {required} slot(s) staffed</div>
+          <div className="exec-tile-label">Active Assignments</div>
+          <div className="exec-tile-value tone-text-neutral">{active}</div>
+          <div className="exec-tile-sub">workers currently active</div>
         </div>
 
         <div className="exec-tile">
           <div className="exec-tile-label">Trade Conflicts</div>
           <div className={`exec-tile-value tone-text-${confTone}`}>{conflicts}</div>
-          <div className="exec-tile-sub">{conflicts === 0 ? "No active conflicts" : `${conflicts} flagged`}</div>
+          <div className="exec-tile-sub">
+            {conflicts === 0 ? "No active conflicts" : `${conflicts} flagged`}
+          </div>
         </div>
 
         <div className="exec-tile">
           <div className="exec-tile-label">Production vs Plan</div>
-          <div className={`exec-tile-value tone-text-${prodTone}`}>{productionPct}%</div>
-          <div className="exec-bar">
-            <div className={`exec-bar-fill tone-bg-${prodTone}`} style={{ width: `${productionPct}%` }} />
+          <div className={`exec-tile-value tone-text-${prodTone}`}>
+            {delta !== null ? `${delta > 0 ? "+" : ""}${delta}%` : "—"}
           </div>
-          <div className="exec-tile-sub">of planned output</div>
+          <div className="exec-tile-sub">vs planned staffing</div>
         </div>
       </div>
     </section>
@@ -249,10 +248,9 @@ function ExecutionPanel({ execution }) {
 }
 
 function ForecastPanel({ forecast }) {
-  const delay = forecast?.projectedDelayDays ?? 0;
-  const loss = forecast?.projectedLoss ?? 0;
-  const delayTone = toneFor("drift", delay);
-  const lossTone = toneFor("loss", loss);
+  const delay = forecast?.projectedDelay ?? null;
+  const uncertainty = forecast?.uncertainty ?? null;
+  const delayTone = toneFor("drift", delay ?? 0);
 
   return (
     <section className="dash-panel">
@@ -262,44 +260,46 @@ function ForecastPanel({ forecast }) {
       <div className="forecast-row">
         <div className="forecast-cell">
           <div className="forecast-label">Projected delay</div>
-          <div className={`forecast-value tone-text-${delayTone}`}>{delay}d</div>
+          <div className={`forecast-value tone-text-${delayTone}`}>
+            {delay !== null ? `${delay}d` : "—"}
+          </div>
         </div>
         <div className="forecast-cell">
-          <div className="forecast-label">Projected loss</div>
-          <div className={`forecast-value tone-text-${lossTone}`}>{formatCurrency(loss)}</div>
+          <div className="forecast-label">Uncertainty</div>
+          <div className="forecast-value">{uncertainty ?? "—"}</div>
         </div>
       </div>
     </section>
   );
 }
 
-function ClientView({ command }) {
-  const client = command.client ?? {};
-  const confTone = toneFor("confidence", client.completionConfidence);
-  const driftTone = toneFor("drift", command.forecast?.projectedDelayDays ?? 0);
+function ClientView({ dashboard }) {
+  const score = dashboard.confidence?.score ?? 0;
+  const level = dashboard.confidence?.level ?? "unknown";
+  const delay = dashboard.forecast?.projectedDelay ?? null;
+  const confTone = toneFor("confidence", score);
+  const driftTone = toneFor("drift", delay ?? 0);
 
   return (
     <div className="client-view">
       <section className="hero-strip">
         <div className={`hero-cell tone-${confTone}`}>
           <div className="hero-secondary-label">Completion Confidence</div>
-          <div className="hero-secondary-value">{client.completionConfidence ?? 0}%</div>
-          <div className="hero-secondary-sub">{plainConfidence(client.completionConfidence ?? 0)}</div>
+          <div className="hero-secondary-value">{score}%</div>
+          <div className="hero-secondary-sub">{plainConfidence(score)}</div>
         </div>
         <div className="hero-cell tone-green">
-          <div className="hero-secondary-label">Verified Work Value</div>
-          <div className="hero-secondary-value">{formatCurrency(client.verifiedWorkValue, { compact: true })}</div>
-          <div className="hero-secondary-sub">
-            {client.verifiedHours ? `${client.verifiedHours} hr verified` : "Awaiting first verified hours"}
-          </div>
+          <div className="hero-secondary-label">Confidence Level</div>
+          <div className="hero-secondary-value">{level}</div>
+          <div className="hero-secondary-sub">based on current signals</div>
         </div>
         <div className={`hero-cell tone-${driftTone}`}>
           <div className="hero-secondary-label">Schedule Status</div>
-          <div className="hero-secondary-value">{client.scheduleStatus ?? "—"}</div>
+          <div className="hero-secondary-value">
+            {delay !== null ? `+${delay}d` : "On Plan"}
+          </div>
           <div className="hero-secondary-sub">
-            {(command.forecast?.projectedDelayDays ?? 0) === 0
-              ? "Tracking to plan"
-              : `Projected ${command.forecast.projectedDelayDays}d slip`}
+            {delay ? `Projected ${delay}d slip` : "Tracking to plan"}
           </div>
         </div>
       </section>
@@ -307,22 +307,22 @@ function ClientView({ command }) {
   );
 }
 
-export function CommandTab({ command, role }) {
-  if (!command) {
-    return <p className="message">No command data available.</p>;
+export function CommandTab({ dashboard, role }) {
+  if (!dashboard) {
+    return <p className="message">No dashboard data available.</p>;
   }
 
   if (role === "client") {
-    return <ClientView command={command} />;
+    return <ClientView dashboard={dashboard} />;
   }
 
   return (
     <div className="command-dashboard">
-      <HeroStrip command={command} />
-      <CausePanel drivers={command.financial?.topDrivers} />
-      <ActionPanel actions={command.actions} />
-      <ExecutionPanel execution={command.execution} />
-      <ForecastPanel forecast={command.forecast} />
+      <HeroStrip dashboard={dashboard} />
+      <CausePanel cause={dashboard.cause} />
+      <ActionPanel action={dashboard.action} />
+      <ExecutionPanel execution={dashboard.execution} />
+      <ForecastPanel forecast={dashboard.forecast} />
     </div>
   );
 }
