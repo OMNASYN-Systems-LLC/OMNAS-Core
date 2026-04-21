@@ -8,6 +8,7 @@ import {
   updateAssignmentStatus
 } from "./repository.js";
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
+import eventBus from "../../infrastructure/events/eventBus.js";
 
 function ensureStatus(assignment, allowed) {
   if (!allowed.includes(assignment.status)) {
@@ -63,7 +64,13 @@ export async function getAssignmentDetails(id, authUser) {
 }
 
 export async function acceptAssignment(id, workerUserId) {
-  return acceptOfferedAssignmentTransaction(id, workerUserId);
+  const assignment = await acceptOfferedAssignmentTransaction(id, workerUserId);
+  eventBus.emit("ON_ASSIGNMENT_ACCEPTED", {
+    assignmentId: assignment.id,
+    jobId: assignment.job_id,
+    workerUserId: assignment.worker_user_id
+  });
+  return assignment;
 }
 
 export async function declineAssignment(id, workerUserId) {
