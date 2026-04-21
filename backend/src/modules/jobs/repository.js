@@ -136,3 +136,46 @@ export async function deleteJob(jobId, postedBy) {
   const { rowCount } = await db.query("DELETE FROM jobs WHERE id = $1 AND posted_by = $2", [jobId, postedBy]);
   return rowCount > 0;
 }
+
+// Returns true when the job is already locked into a ghost-replacement cycle.
+export async function isJobReplacing(jobId) {
+  const { rows } = await db.query(
+    `SELECT (metadata->'ghost_recovery'->>'is_replacing')::boolean AS is_replacing
+     FROM jobs WHERE id = $1`,
+    [jobId]
+  );
+  return rows[0]?.is_replacing === true;
+}
+
+// Atomically sets is_replacing + at_risk inside metadata.ghost_recovery without
+// disturbing any other keys already present in the metadata document.
+export async function setReplacementLock(jobId) {
+  await db.query(
+    `UPDATE jobs
+     SET metadata   = jsonb_set(
+           metadata,
+           '{ghost_recovery}',
+           COALESCE(metadata->'ghost_recovery', '{}'::jsonb)
+             || '{"is_replacing":true,"at_risk":true}'::jsonb
+         ),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [jobId]
+  );
+}
+
+// Merges arbitrary advisory fields into metadata.ghost_recovery.
+// Used by the scheduling service to store ghost_event_link and ripple_delay_est.
+export async function patchJobGhostRecovery(jobId, patch) {
+  await db.query(
+    `UPDATE jobs
+     SET metadata   = jsonb_set(
+           metadata,
+           '{ghost_recovery}',
+           COALESCE(metadata->'ghost_recovery', '{}'::jsonb) || $2::jsonb
+         ),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [jobId, JSON.stringify(patch)]
+  );
+}

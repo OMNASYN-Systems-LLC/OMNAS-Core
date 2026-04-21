@@ -28,6 +28,7 @@ import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
 import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { registerHandlers } from "./orchestrator/registerHandlers.js";
 
 export const app = express();
 
@@ -82,6 +83,9 @@ app.use("/api/escalations", escalationsRouter);      // Safety + issue escalatio
 
 // 🔥 ACTIONS / DIRECTIVES
 app.use("/api/actions", actionsRouter);              // Draft directive system
+
+// 🔥 ORCHESTRATOR — event-driven recovery handlers (ghost, assignment, calendar)
+registerHandlers();
 
 // 🔥 ERROR HANDLING
 app.use(notFoundHandler);

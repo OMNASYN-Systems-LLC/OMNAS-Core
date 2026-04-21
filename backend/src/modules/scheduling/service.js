@@ -5,6 +5,7 @@ import { queueEscalations } from "../escalations/service.js";
 import { getJobSchedulingContext } from "./repository.js";
 import { runFieldToPlanAudit } from "./audit.service.js";
 import { adjustLookahead } from "./adjustLookahead.service.js";
+import { patchJobGhostRecovery } from "../jobs/repository.js";
 
 const TASK_PHASES = ["rough-in", "install", "test", "closeout"];
 
@@ -238,4 +239,16 @@ export async function getJobSchedule(jobId, contractorUserId) {
     audit,
     lookaheadAdjustment
   };
+}
+
+// MFVP advisory — marks the job AT_RISK and records ghost event details in
+// metadata.ghost_recovery. No CPM resequencing is performed in this pack.
+export async function markRiskState(jobId, ghostPayload) {
+  const advisory = {
+    at_risk:          true,
+    ghost_event_link: ghostPayload.assignmentId  ?? null,
+    ripple_delay_est: ghostPayload.rippleDelayEst ?? null,
+    marked_at:        new Date().toISOString(),
+  };
+  await patchJobGhostRecovery(jobId, advisory);
 }
