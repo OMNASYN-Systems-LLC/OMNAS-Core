@@ -1,10 +1,11 @@
 // 🔥 FULL IMPORTS (merged both branches)
 import { getComplianceStatus, getTradeFit, normalizeTrade } from "../pca/taxonomy/tradeIntelligence.js";
-import { 
-  getJobWithRequirements, 
-  listWorkerPerformance, 
-  listWorkersForMatching, 
-  replaceMatchScores 
+import {
+  getJobWithRequirements,
+  getRankedMatchScoresFromCache,
+  listWorkerPerformance,
+  listWorkersForMatching,
+  replaceMatchScores
 } from "./repository.js";
 import { assertNonNegativeInteger } from "../../utils/validation.js";
 
@@ -139,6 +140,17 @@ function computeTradeAdjacency(jobCategories, workerCategories) {
     complianceStatus: best.complianceStatus,
     requiresLicensedTrade: best.requiresLicensedTrade
   };
+}
+
+// Returns a ranked list from the match_scores cache.
+// Falls back to a full recompute when the cache is empty.
+export async function getRankedMatchList(jobId, contractorUserId) {
+  assertNonNegativeInteger(jobId, "jobId");
+
+  const cached = await getRankedMatchScoresFromCache(jobId);
+  if (cached.length > 0) return cached;
+
+  return getJobMatches(jobId, contractorUserId);
 }
 
 // 🔥 MAIN MATCHING ENGINE (100% merged)
