@@ -15,19 +15,18 @@ async function request(path, { method = "GET", payload, auth }) {
     body: payload ? JSON.stringify(payload) : undefined
   });
 
-  if (response.status === 204) {
-    return null;
-  }
+  if (response.status === 204) return null;
 
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || "Request failed");
+    throw new Error(data.message || `Request failed: ${response.status}`);
   }
 
   return data;
 }
 
+// 🔥 AUTHENTICATION
 export function register(payload) {
   return request("/auth/register", { method: "POST", payload });
 }
@@ -36,6 +35,7 @@ export function login(payload) {
   return request("/auth/login", { method: "POST", payload });
 }
 
+// 🔥 PROFILES & SKILLS
 export function listSkills(auth) {
   return request("/skills", { auth });
 }
@@ -64,6 +64,7 @@ export function getContractorProfile(auth) {
   return request("/contractors/profile", { auth });
 }
 
+// 🔥 JOBS (CRUD + Analytics - merged both branches!)
 export function createJob(payload, auth) {
   return request("/jobs", { method: "POST", payload, auth });
 }
@@ -84,15 +85,28 @@ export function deleteJob(id, auth) {
   return request(`/jobs/${id}`, { method: "DELETE", auth });
 }
 
+// 🔥 JOB INTELLIGENCE (construction SOTA!)
 export function getJobMatches(id, auth) {
   return request(`/jobs/${id}/matches`, { auth });
+}
+
+export function getJobRecommendations(id, auth) {
+  return request(`/jobs/${id}/recommendations`, { auth });
+}
+
+export function getJobSchedule(id, auth) {
+  return request(`/jobs/${id}/schedule`, { auth });
+}
+
+export function getJobErosion(id, auth) {
+  return request(`/jobs/${id}/erosion`, { auth });
 }
 
 export function getJobCommand(id, auth) {
   return request(`/jobs/${id}/command`, { auth });
 }
 
-
+// 🔥 ASSIGNMENTS
 export function createAssignment(payload, auth) {
   return request("/assignments", { method: "POST", payload, auth });
 }
@@ -121,7 +135,7 @@ export function completeAssignment(id, auth) {
   return request(`/assignments/${id}/complete`, { method: "PATCH", auth });
 }
 
-
+// 🔥 LOGGING (voice + execution - merged!)
 export function submitDailyLog(assignmentId, payload, auth) {
   return request(`/assignments/${assignmentId}/logs`, { method: "POST", payload, auth });
 }
@@ -134,11 +148,29 @@ export function getLog(id, auth) {
   return request(`/logs/${id}`, { auth });
 }
 
+// 🔥 FIELD LOGGING SUPERPOWERS
+export function submitDailyExecutionLog(payload, auth) {
+  return request("/logs/daily", { method: "POST", payload, auth });
+}
 
+export function submitVoiceLog(payload, auth) {
+  return request("/logs/voice", { method: "POST", payload, auth });
+}
+
+// 🔥 OPPORTUNITIES
 export function listReadyOpportunities(auth) {
   return request("/opportunities/ready", { auth });
 }
 
 export function importOpportunityToJob(id, auth) {
   return request(`/opportunities/${id}/import`, { method: "POST", auth });
+}
+
+// 🔥 ESCALATIONS (construction safety/compliance)
+export function listEscalations(auth, status = "pending") {
+  return request(`/escalations?status=${encodeURIComponent(status)}`, { auth });
+}
+
+export function decideEscalation(id, payload, auth) {
+  return request(`/escalations/${id}/decision`, { method: "POST", payload, auth });
 }
