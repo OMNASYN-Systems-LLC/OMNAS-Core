@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { getJob, getJobCommand } from "../services/api.js";
 import { CommandTab } from "../components/CommandTab.jsx";
 
-const DEFAULT_AUTH = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+const CONTRACTOR_AUTH = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+const CLIENT_AUTH = { userId: "00000000-0000-0000-0000-000000000003", role: "client" };
 
 export function JobDetailPage() {
   const { jobId } = useParams();
-  const auth = DEFAULT_AUTH;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const role = searchParams.get("role") === "client" ? "client" : "contractor";
+  const auth = role === "client" ? CLIENT_AUTH : CONTRACTOR_AUTH;
+
   const [activeTab, setActiveTab] = useState("command");
   const [job, setJob] = useState(null);
   const [command, setCommand] = useState(null);
@@ -29,7 +33,7 @@ export function JobDetailPage() {
         setJob(jobResponse?.data ?? null);
         setCommand(commandResponse?.data ?? null);
       } catch (err) {
-        if (!cancelled) setError(err.message || "Failed to load job command data");
+        if (!cancelled) setError(err.message || "Failed to load command data");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -39,7 +43,14 @@ export function JobDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [jobId, role]);
+
+  function switchRole(next) {
+    const params = new URLSearchParams(searchParams);
+    if (next === "client") params.set("role", "client");
+    else params.delete("role");
+    setSearchParams(params, { replace: true });
+  }
 
   return (
     <>
@@ -47,7 +58,25 @@ export function JobDetailPage() {
         <Link to="/contractor-dashboard">← Dashboard</Link>
       </nav>
 
-      <h1>{job?.title ?? `Job #${jobId}`}</h1>
+      <div className="job-detail-header">
+        <h1>{job?.title ?? command?.job?.title ?? `Job #${jobId}`}</h1>
+        <div className="role-switch" role="group" aria-label="View as">
+          <button
+            type="button"
+            className={`role-switch-btn ${role === "contractor" ? "is-active" : ""}`}
+            onClick={() => switchRole("contractor")}
+          >
+            Contractor
+          </button>
+          <button
+            type="button"
+            className={`role-switch-btn ${role === "client" ? "is-active" : ""}`}
+            onClick={() => switchRole("client")}
+          >
+            Client
+          </button>
+        </div>
+      </div>
 
       <div className="tab-bar" role="tablist">
         <button
@@ -67,8 +96,8 @@ export function JobDetailPage() {
       {loading ? <p className="message">Loading command data…</p> : null}
       {error ? <p className="message message-error">{error}</p> : null}
 
-      {activeTab === "command" && command ? (
-        <CommandTab command={command} jobId={jobId} role={auth.role} />
+      {!loading && !error && activeTab === "command" && command ? (
+        <CommandTab command={command} role={role} />
       ) : null}
     </>
   );

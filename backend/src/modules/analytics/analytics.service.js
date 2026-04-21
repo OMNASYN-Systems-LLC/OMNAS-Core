@@ -149,6 +149,19 @@ function computeForecast(financial, drift, readiness) {
   return { projectedDelayDays, projectedLoss };
 }
 
+function computeVerifiedWork(job, logs) {
+  const verifiedHours = logs.reduce((sum, log) => sum + Number(log.hours_worked || 0), 0);
+  const verifiedWorkValue = round(verifiedHours * Number(job.pay_rate || 0));
+  return { verifiedHours: round(verifiedHours, 1), verifiedWorkValue };
+}
+
+function scheduleStatusLabel(drift) {
+  if (drift.driftDays === 0) return "On Plan";
+  if (drift.phase === "not-started") return `${drift.driftDays}d late to start`;
+  if (drift.phase === "overrun") return `${drift.driftDays}d past completion`;
+  return `${drift.driftDays}d behind plan`;
+}
+
 function computeMissingWork(job, assignments, logs, now) {
   const activeAssignments = assignments.filter((a) => ["accepted", "active"].includes(a.status));
   if (activeAssignments.length === 0) {
@@ -262,26 +275,20 @@ function buildActions(job, assignments, readiness, drift, risks, missingWork, ro
 
 function buildClientView(command) {
   return {
+    job: command.job,
     health: command.health,
-    financial: {
-      dailyLoss: null,
-      weeklyProjection: null,
-      topDrivers: command.financial.topDrivers.map((d) => ({ label: d.label, metric: d.metric }))
+    client: {
+      completionConfidence: command.health.score,
+      verifiedWorkValue: command.execution.verifiedWorkValue,
+      verifiedHours: command.execution.verifiedHours,
+      scheduleStatus: command.execution.scheduleStatus
     },
-    execution: {
-      scheduleDriftDays: command.execution.scheduleDriftDays,
-      readinessPercent: command.execution.readinessPercent,
-      missingWork: { missingLogs: command.execution.missingWork.missingLogs, silentWorkers: [] }
-    },
-    risks: {
-      escalations: command.risks.escalations,
-      hardLocks: command.risks.hardLocks,
-      congestion: command.risks.congestion,
-      safety: command.risks.safety
-    },
-    automation: null,
-    forecast: command.forecast,
-    actions: command.actions.filter((a) => a.priority === "high")
+    forecast: { projectedDelayDays: command.forecast.projectedDelayDays },
+    actions: command.actions.filter((a) => a.priority === "high").map((a) => ({
+      id: a.id,
+      label: a.label,
+      priority: a.priority
+    }))
   };
 }
 
@@ -318,6 +325,7 @@ export async function getJobCommand(jobId, authUser) {
   const missingWork = computeMissingWork(job, assignments, logs, now);
   const forecast = computeForecast(financial, drift, readiness);
   const health = computeHealth(readiness, drift, risks, financial);
+  const verified = computeVerifiedWork(job, logs);
 
   const command = {
     job: {
@@ -333,10 +341,14 @@ export async function getJobCommand(jobId, authUser) {
     execution: {
       scheduleDriftDays: drift.driftDays,
       phase: drift.phase,
+      scheduleStatus: scheduleStatusLabel(drift),
       readinessPercent: readiness.readinessPercent,
       acceptedCount: readiness.acceptedCount,
       requiredSlots: readiness.requiredSlots,
       openSlots: readiness.openSlots,
+      verifiedHours: verified.verifiedHours,
+      verifiedWorkValue: verified.verifiedWorkValue,
+      conflicts: risks.congestion,
       missingWork,
       matchPool: {
         totalMatches: Number(matchStats.total_matches),
