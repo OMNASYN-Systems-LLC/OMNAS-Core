@@ -1,4 +1,5 @@
 import {
+  acceptOfferedAssignmentTransaction,
   createAssignment,
   createAssignmentsBatch,
   getAssignmentById,
@@ -9,6 +10,7 @@ import {
 } from "./repository.js";
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
 import { recomputeReliability } from "../reliability/reliability.service.js";
+import eventBus from "../../infrastructure/events/eventBus.js";
 
 function ensureStatus(assignment, allowed) {
   if (!allowed.includes(assignment.status)) {
@@ -29,7 +31,13 @@ export async function createAssignmentOffer(contractorUserId, payload) {
     throw error;
   }
 
-  return createAssignment({ jobId: payload.jobId, workerUserId: payload.workerUserId, assignedBy: contractorUserId });
+  return createAssignment({
+    jobId:        payload.jobId,
+    workerUserId: payload.workerUserId,
+    assignedBy:   contractorUserId,
+    expiresAt:    payload.expiresAt    ?? null,
+    urgencyLevel: payload.urgencyLevel ?? "standard"
+  });
 }
 
 export async function getAssignmentDetails(id, authUser) {
@@ -57,23 +65,19 @@ export async function getAssignmentDetails(id, authUser) {
   return assignment;
 }
 
+// Uses a transactional FOR-UPDATE accept with expiry check (safer than
+// a two-step fetch + update). Emits ON_ASSIGNMENT_ACCEPTED so the calendar
+// handler can create a shift block.
 export async function acceptAssignment(id, workerUserId) {
-  const assignment = await getAssignmentById(id);
-  if (!assignment) {
-    const error = new Error("Assignment not found");
-    error.statusCode = 404;
-    throw error;
-  }
+  const assignment = await acceptOfferedAssignmentTransaction(id, workerUserId);
 
-  if (assignment.worker_user_id !== workerUserId) {
-    const error = new Error("You can only accept your own assignments");
-    error.statusCode = 403;
-    throw error;
-  }
+  eventBus.emit("ON_ASSIGNMENT_ACCEPTED", {
+    assignmentId: assignment.id,
+    jobId:        assignment.job_id,
+    workerUserId: assignment.worker_user_id
+  });
 
-  ensureStatus(assignment, ["offered"]);
-
-  return updateAssignmentStatus(id, "accepted", { respondedAt: new Date().toISOString() });
+  return assignment;
 }
 
 export async function declineAssignment(id, workerUserId) {
@@ -122,7 +126,9 @@ export async function completeAssignment(id, authUser) {
     throw error;
   }
 
-  const allowed = assignment.worker_user_id === authUser.userId || assignment.assigned_by === authUser.userId;
+  const allowed =
+    assignment.worker_user_id === authUser.userId ||
+    assignment.assigned_by    === authUser.userId;
 
   if (!allowed) {
     const error = new Error("You can only complete related assignments");
@@ -132,9 +138,11 @@ export async function completeAssignment(id, authUser) {
 
   ensureStatus(assignment, ["active"]);
 
-  const completed = await updateAssignmentStatus(id, "completed", { completedAt: new Date().toISOString() });
+  const completed = await updateAssignmentStatus(id, "completed", {
+    completedAt: new Date().toISOString()
+  });
 
-  // Fire-and-forget: update reliability score without blocking the response
+  // Fire-and-forget: refresh reliability score without blocking the response
   recomputeReliability(assignment.worker_user_id).catch(() => {});
 
   return completed;
