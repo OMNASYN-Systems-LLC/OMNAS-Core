@@ -1,0 +1,71 @@
+{
+  "core_trade": {
+    "electrical": ["electrical", "electrician", "power"],
+    "plumbing": ["plumbing", "pipefitting", "piping"],
+    "hvac": ["hvac", "mechanical", "air_handling"],
+    "concrete": ["concrete", "masonry", "foundation"],
+    "roofing": ["roofing", "waterproofing"],
+    "finishes": ["finishes", "drywall", "paint"],
+    "sitework": ["sitework", "earthwork", "grading"],
+    "maintenance": ["maintenance", "facilities"]
+  },
+  "adjacencies": {
+    "electrical": {
+      "hvac": 0.75,
+      "finishes": 0.75
+    },
+    "plumbing": {
+      "hvac": 0.75,
+      "sitework": 0.75
+    },
+    "hvac": {
+      "electrical": 0.75,
+      "plumbing": 0.75
+    },
+    "concrete": {
+      "sitework": 0.75,
+      "roofing": 0.75
+    },
+    "roofing": {
+      "concrete": 0.75,
+      "finishes": 0.75
+    },
+    "finishes": {
+      "electrical": 0.75,
+      "roofing": 0.75
+    },
+    "sitework": {
+      "concrete": 0.75,
+      "plumbing": 0.75
+    },
+    "maintenance": {
+      "electrical": 0.75,
+      "plumbing": 0.75,
+      "hvac": 0.75
+    }
+  },
+  "incidental_trades": {
+    "electrical": ["sitework", "maintenance"],
+    "plumbing": ["maintenance", "sitework"],
+    "hvac": ["maintenance", "finishes"],
+    "concrete": ["sitework", "maintenance"],
+    "roofing": ["finishes", "maintenance"],
+    "finishes": ["maintenance", "sitework"],
+    "sitework": ["maintenance", "concrete"],
+    "maintenance": ["sitework", "finishes"]
+  },
+  "exclusions": {
+    "high_voltage_electrical": {
+      "requiresLicensedTrade": true,
+      "reason": "requires certified trade"
+    },
+    "fire_suppression": {
+      "requiresLicensedTrade": true,
+      "reason": "requires certified trade"
+    },
+    "structural_welding": {
+      "requiresLicensedTrade": true,
+      "reason": "requires certified trade"
+    }
+  }
+}

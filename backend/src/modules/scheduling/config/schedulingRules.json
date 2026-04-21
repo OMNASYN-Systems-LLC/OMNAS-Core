@@ -1,0 +1,31 @@
+{
+  "dependencies": {
+    "hard": [
+      { "predecessor": "concrete", "successor": "roofing", "reason": "Concrete not cured" },
+      { "predecessor": "sitework", "successor": "concrete", "reason": "Sitework incomplete" }
+    ],
+    "soft": [
+      { "predecessor": "electrical", "successor": "finishes", "reason": "Electrical rough-in recommended before finishes" },
+      { "predecessor": "hvac", "successor": "finishes", "reason": "HVAC rough-in recommended before finishes" }
+    ]
+  },
+  "congestion": {
+    "sq_ft_per_worker": 200,
+    "decay_curve": [
+      { "ratio": 1.0, "factor": 1.0 },
+      { "ratio": 1.2, "factor": 0.85 },
+      { "ratio": 1.5, "factor": 0.6 },
+      { "ratio": 2.0, "factor": 0.3 }
+    ],
+    "max_crews": {
+      "roofing": 4,
+      "concrete": 6,
+      "electrical": 5,
+      "default": 5
+    }
+  },
+  "fatigue": {
+    "weekly_threshold": 50,
+    "penalty": 0.7
+  }
+}

@@ -1,0 +1,231 @@
+import { db } from "../../config/db.js";
+
+export async function createAssignment(payload) {
+  const query = `
+    INSERT INTO assignments (job_id, worker_user_id, assigned_by, status, offered_at, expires_at, urgency_level, updated_at)
+    VALUES ($1, $2, $3, 'offered', NOW(), $4, $5, NOW())
+    RETURNING *
+  `;
+
+  const { rows } = await db.query(query, [
+    payload.jobId,
+    payload.workerUserId,
+    payload.assignedBy,
+    payload.expiresAt ?? null,
+    payload.urgencyLevel || "standard"
+  ]);
+  return rows[0];
+}
+
+export async function getAssignmentById(id) {
+  const query = `
+    SELECT a.*, j.title AS job_title, wp.first_name, wp.last_name
+    FROM assignments a
+    JOIN jobs j ON j.id = a.job_id
+    JOIN worker_profiles wp ON wp.user_id = a.worker_user_id
+    WHERE a.id = $1
+  `;
+
+  const { rows } = await db.query(query, [id]);
+  return rows[0] ?? null;
+}
+
+export async function getAssignmentByJobAndWorker(jobId, workerUserId) {
+  const { rows } = await db.query(
+    "SELECT * FROM assignments WHERE job_id = $1 AND worker_user_id = $2 AND status IN ('offered', 'accepted', 'active') ORDER BY created_at DESC LIMIT 1",
+    [jobId, workerUserId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function listAssignmentsForWorker(workerUserId) {
+  const query = `
+    SELECT a.*, j.title AS job_title, j.description, j.starts_at, j.ends_at
+    FROM assignments a
+    JOIN jobs j ON j.id = a.job_id
+    WHERE a.worker_user_id = $1
+    ORDER BY a.created_at DESC
+  `;
+
+  const { rows } = await db.query(query, [workerUserId]);
+  return rows;
+}
+
+export async function listAssignmentsForContractor(contractorUserId) {
+  const query = `
+    SELECT a.*, j.title AS job_title
+    FROM assignments a
+    JOIN jobs j ON j.id = a.job_id
+    WHERE a.assigned_by = $1
+    ORDER BY a.created_at DESC
+  `;
+
+  const { rows } = await db.query(query, [contractorUserId]);
+  return rows;
+}
+
+export async function updateAssignmentStatus(id, status, timestamps = {}) {
+  const query = `
+    UPDATE assignments
+    SET status = $2,
+        responded_at = COALESCE($3, responded_at),
+        started_at = COALESCE($4, started_at),
+        completed_at = COALESCE($5, completed_at),
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const { rows } = await db.query(query, [
+    id,
+    status,
+    timestamps.respondedAt ?? null,
+    timestamps.startedAt ?? null,
+    timestamps.completedAt ?? null
+  ]);
+
+  return rows[0] ?? null;
+}
+
+export async function acceptOfferedAssignmentTransaction(id, workerUserId) {
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows: lockRows } = await client.query("SELECT * FROM assignments WHERE id = $1 FOR UPDATE", [id]);
+    const assignment = lockRows[0] ?? null;
+
+    if (!assignment) {
+      const error = new Error("Assignment not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (assignment.worker_user_id !== workerUserId) {
+      const error = new Error("You can only accept your own assignments");
+      error.statusCode = 403;
+      throw error;
+    }
+
+    if (assignment.status !== "offered") {
+      const error = new Error(`Invalid status transition from ${assignment.status}`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    if (assignment.expires_at && new Date(assignment.expires_at) <= new Date()) {
+      const error = new Error("Offer has expired");
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const { rows: updatedRows } = await client.query(
+      `
+      UPDATE assignments
+      SET status = 'accepted',
+          responded_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id]
+    );
+
+    await client.query("COMMIT");
+    return updatedRows[0] ?? null;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function listExpiredOffers() {
+  const query = `
+    SELECT id, job_id, assigned_by
+    FROM assignments
+    WHERE status = 'offered'
+      AND expires_at IS NOT NULL
+      AND expires_at < NOW()
+  `;
+  const { rows } = await db.query(query);
+  return rows;
+}
+
+export async function markAssignmentExpired(id) {
+  const { rows } = await db.query("UPDATE assignments SET status = 'expired', updated_at = NOW() WHERE id = $1 RETURNING *", [id]);
+  return rows[0] ?? null;
+}
+
+export async function listGhostableAcceptedAssignments() {
+  const query = `
+    SELECT a.id, a.job_id, a.assigned_by
+    FROM assignments a
+    JOIN jobs j ON j.id = a.job_id
+    WHERE a.status = 'accepted'
+      AND j.starts_at <= NOW() - INTERVAL '15 minutes'
+      AND a.started_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM daily_logs dl
+        WHERE dl.assignment_id = a.id
+          AND COALESCE(dl.is_draft, FALSE) = FALSE
+      )
+  `;
+  const { rows } = await db.query(query);
+  return rows;
+}
+
+export async function markAssignmentGhosted(id) {
+  const { rows } = await db.query("UPDATE assignments SET status = 'ghosted', updated_at = NOW() WHERE id = $1 RETURNING *", [id]);
+  return rows[0] ?? null;
+}
+
+export async function incrementRetryCountByJob(jobId) {
+  const { rows } = await db.query(
+    `
+    UPDATE assignments
+    SET retry_count = retry_count + 1,
+        updated_at = NOW()
+    WHERE id = (
+      SELECT id FROM assignments WHERE job_id = $1 ORDER BY created_at DESC LIMIT 1
+    )
+    RETURNING retry_count
+    `,
+    [jobId]
+  );
+  return Number(rows[0]?.retry_count || 1);
+}
+
+export async function getCurrentRetryCount(jobId) {
+  const { rows } = await db.query("SELECT COALESCE(MAX(retry_count), 0) AS retry_count FROM assignments WHERE job_id = $1", [jobId]);
+  return Number(rows[0]?.retry_count || 0);
+}
+
+export async function countOpenSlots(jobId, contractorUserId) {
+  const query = `
+    SELECT j.id,
+           COALESCE((j.metadata->>'requiredHeadcount')::INT, 1) AS required_headcount,
+           (
+             SELECT COUNT(*)::INT
+             FROM assignments a
+             WHERE a.job_id = j.id
+               AND a.status IN ('offered', 'accepted', 'active', 'completed')
+           ) AS occupied
+    FROM jobs j
+    WHERE j.id = $1
+      AND j.posted_by = $2
+  `;
+  const { rows } = await db.query(query, [jobId, contractorUserId]);
+  const row = rows[0];
+  if (!row) return 0;
+  return Math.max(0, Number(row.required_headcount || 1) - Number(row.occupied || 0));
+}
+
+export async function getLiveWorkerIdsForJob(jobId) {
+  const { rows } = await db.query(
+    "SELECT worker_user_id FROM assignments WHERE job_id = $1 AND status IN ('offered', 'accepted', 'active')",
+    [jobId]
+  );
+  return rows.map((row) => row.worker_user_id);
+}

@@ -137,3 +137,7 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# keep source module named logs
+!backend/src/modules/logs/
+!backend/src/modules/logs/**

@@ -1,0 +1,24 @@
+{
+  "zone_types": {
+    "ROOM": { "max_occupancy": 3 },
+    "FLOOR": { "max_occupancy_per_1000sqft": 5 },
+    "RADIUS": { "default_buffer_ft": 25 }
+  },
+  "shift_buckets": {
+    "AM": ["06:00", "12:00"],
+    "PM": ["12:00", "18:00"],
+    "NIGHT": ["18:00", "06:00"]
+  },
+  "distance_rules": [
+    {
+      "trades": ["WELDING", "PAINTING"],
+      "min_distance_ft": 35,
+      "severity": "CRITICAL"
+    },
+    {
+      "trades": ["OVERHEAD_WORK", "FLOOR_WORK"],
+      "min_distance_ft": 25,
+      "severity": "CRITICAL"
+    }
+  ]
+}
