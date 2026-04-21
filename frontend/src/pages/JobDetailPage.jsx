@@ -1,15 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { createAssignment, getJob, getJobCommand, getJobRecommendations, getJobSchedule } from "../services/api.js";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+// 🔥 FULL API FEATURES (merged both branches)
+import { 
+  createAssignment, 
+  getJob, 
+  getJobCommand, 
+  getJobRecommendations, 
+  getJobSchedule 
+} from "../services/api.js";
+import { CommandTab } from "../components/CommandTab.jsx";
+
+const CONTRACTOR_AUTH = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+const CLIENT_AUTH = { userId: "00000000-0000-0000-0000-000000000003", role: "client" };
 
 export function JobDetailPage() {
   const { jobId } = useParams();
-  const auth = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
-  const [activeTab, setActiveTab] = useState("recommendations");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const role = searchParams.get("role") === "client" ? "client" : "contractor";
+  const auth = role === "client" ? CLIENT_AUTH : CONTRACTOR_AUTH;
+
+  const [activeTab, setActiveTab] = useState("command");
   const [job, setJob] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [command, setCommand] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [appliedAdjustment, setAppliedAdjustment] = useState(false);
   const [showSafetyModal, setShowSafetyModal] = useState(false);
@@ -17,385 +33,415 @@ export function JobDetailPage() {
   const [shiftView, setShiftView] = useState("ALL");
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
+      setLoading(true);
+      setError("");
       try {
+        // 🔥 PARALLEL DATA LOAD (ultra-fast)
         const [jobResponse, recommendationResponse, scheduleResponse, commandResponse] = await Promise.all([
-          getJob(jobId, auth),
+          getJob(jobId, auth).catch(() => null),
           getJobRecommendations(jobId, auth),
           getJobSchedule(jobId, auth),
           getJobCommand(jobId, auth)
         ]);
 
-        setJob(jobResponse.data);
-        setRecommendations(recommendationResponse.data.gapRecommendations || []);
+        if (cancelled) return;
+
+        setJob(jobResponse?.data ?? null);
+        setRecommendations(recommendationResponse.data?.gapRecommendations || []);
         setSchedule(scheduleResponse.data);
         setCommand(commandResponse.data || null);
-        const hasCritical = (scheduleResponse.data?.lookaheadAdjustment?.safetyConflicts || []).some((c) => c.severity === "CRITICAL");
+        
+        // 🔥 SAFETY MODAL (construction critical!)
+        const hasCritical = (scheduleResponse.data?.lookaheadAdjustment?.safetyConflicts || [])
+          .some(c => c.severity === "CRITICAL");
         setShowSafetyModal(hasCritical);
-      } catch (error) {
-        setMessage(error.message);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Failed to load job data");
+          setMessage("Partial data available - some features may be limited");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
-  }, [jobId]);
 
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId, role]);
+
+  function switchRole(nextRole) {
+    const params = new URLSearchParams(searchParams);
+    if (nextRole === "client") {
+      params.set("role", "client");
+    } else {
+      params.delete("role");
+    }
+    setSearchParams(params, { replace: true });
+  }
+
+  // 🔥 READINESS STATUS (construction scheduling)
   const readinessClass = useMemo(() => {
-    if (!schedule?.readinessStatus) {
-      return "severity-medium";
-    }
-
-    if (schedule.readinessStatus === "READY") {
-      return "severity-low";
-    }
-
-    if (schedule.readinessStatus === "AT_RISK") {
-      return "severity-medium";
-    }
-
+    if (!schedule?.readinessStatus) return "severity-medium";
+    if (schedule.readinessStatus === "READY") return "severity-low";
+    if (schedule.readinessStatus === "AT_RISK") return "severity-medium";
     return "severity-high";
   }, [schedule]);
 
+  // 🔥 ASSIGN WORKER ACTION
   async function handleAssign(workerId) {
     try {
       await createAssignment({ jobId: Number(jobId), workerUserId: workerId }, auth);
-      setMessage("Assignment offer sent.");
+      setMessage("✅ Assignment offer sent to worker!");
+      setTimeout(() => setMessage(""), 5000);
     } catch (error) {
-      setMessage(error.message);
+      setMessage(`❌ ${error.message}`);
     }
   }
 
+  // 🔥 STATUS DOT HELPER
   function statusDot(status) {
-    if (status === "GREEN") return "🟢";
-    if (status === "YELLOW") return "🟡";
+    if (status === "GREEN" || status === "healthy") return "🟢";
+    if (status === "YELLOW" || status === "caution") return "🟡";
+    if (status === "AT_RISK") return "🟠";
     return "🔴";
   }
 
-
-
+  // 🔥 SAFETY COLORING
   function safetyColor(severity) {
     if (severity === "CRITICAL") return "#ff6b6b";
     if (severity === "HIGH") return "#ff9f43";
     return "#f6e58d";
   }
 
+  // 🔥 3-WEEK GANTT (construction lookahead)
   function renderWeekList(lookaheadSource) {
+    if (!lookaheadSource) return <p>No schedule data</p>;
+
     return (
-      <div className="gantt-grid">
-        <div className="gantt-row">
+      <div className="gantt-grid" style={{ 
+        display: "grid", 
+        gridTemplateColumns: "repeat(3, 1fr)", 
+        gap: "1rem",
+        marginBottom: "1rem"
+      }}>
+        <div style={{ background: "#e3f2fd", padding: "1rem", borderRadius: "8px" }}>
           <strong>Week 1</strong>
-          <div className="gantt-bar week1">{(lookaheadSource?.week1 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
+          <div style={{ fontSize: "0.9rem", marginTop: "0.5rem" }}>
+            {(lookaheadSource?.week1 || [])
+              .filter(item => shiftView === "ALL" || (item.shift || "AM") === shiftView)
+              .map(item => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`)
+              .join(", ") || "No planned trades"}
+          </div>
         </div>
-        <div className="gantt-row">
+        <div style={{ background: "#e8f5e8", padding: "1rem", borderRadius: "8px" }}>
           <strong>Week 2</strong>
-          <div className="gantt-bar week2">{(lookaheadSource?.week2 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
+          <div style={{ fontSize: "0.9rem", marginTop: "0.5rem" }}>
+            {(lookaheadSource?.week2 || [])
+              .filter(item => shiftView === "ALL" || (item.shift || "AM") === shiftView)
+              .map(item => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`)
+              .join(", ") || "No planned trades"}
+          </div>
         </div>
-        <div className="gantt-row">
+        <div style={{ background: "#fff3e0", padding: "1rem", borderRadius: "8px" }}>
           <strong>Week 3</strong>
-          <div className="gantt-bar week3">{(lookaheadSource?.week3 || []).filter((item) => shiftView === "ALL" || (item.shift || "AM") === shiftView).map((item) => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`).join(", ") || "No planned trades"}</div>
+          <div style={{ fontSize: "0.9rem", marginTop: "0.5rem" }}>
+            {(lookaheadSource?.week3 || [])
+              .filter(item => shiftView === "ALL" || (item.shift || "AM") === shiftView)
+              .map(item => `${item.category} [${item.zone_id || zoneView}/${item.shift || "AM"}]`)
+              .join(", ") || "No planned trades"}
+          </div>
         </div>
       </div>
     );
   }
 
+  // 🔥 RECOMMENDATIONS TAB
   function renderRecommendations() {
     return (
-      <section>
-        <h2>Recommendations</h2>
-        {recommendations.length === 0 ? <p className="message">No recommendation gaps detected.</p> : null}
-
-        {recommendations.map((gap) => (
-          <article key={gap.category} className={`analysis-card severity-${gap.severity}`}>
-            <h3>
-              {gap.category} ({gap.severity})
-            </h3>
-
-            <ul>
-              {gap.topRecommendations.map((item) => (
-                <li key={item.workerId}>
-                  <strong>{item.workerName}</strong>
-                  {item.bestFitForGap ? <span> ✅ Best Fit</span> : null}
-                  <br />
-                  Fit Score: {item.fitScore}%
-                  <br />
-                  Trade Fit Type: {item.tradeFitType}
-                  <br />
-                  Compliance: {item.complianceStatus} {item.requiresLicensedTrade ? "(licensed trade required)" : ""}
-                  <br />
-                  Rationale: skill {item.rationale.skill}, reliability {item.rationale.reliability}, availability {item.rationale.availability}, proximity {item.rationale.proximity}, experience {item.rationale.experience}
-                  <br />
-                  <button type="button" onClick={() => handleAssign(item.workerId)}>
-                    Assign Worker
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
+      <section style={{ marginTop: "2rem" }}>
+        <h2>🤖 AI Worker Recommendations</h2>
+        {recommendations.length === 0 ? (
+          <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>
+            🎯 No gaps detected - fully staffed!<br/>
+            <small>OMNAS AI found perfect worker-job matches</small>
+          </p>
+        ) : (
+          <div style={{ display: "grid", gap: "1.5rem" }}>
+            {recommendations.map((gap) => (
+              <article key={gap.category} style={{
+                border: "1px solid #ddd",
+                borderRadius: "12px",
+                padding: "1.5rem",
+                background: gap.severity === "low" ? "#e8f5e8" : "#fff3cd"
+              }}>
+                <h3 style={{ marginTop: 0 }}>
+                  {gap.category} ({gap.severity})
+                </h3>
+                <div style={{ display: "grid", gap: "1rem" }}>
+                  {gap.topRecommendations?.map((item) => (
+                    <div key={item.workerId} style={{
+                      border: "1px solid #eee",
+                      borderRadius: "8px",
+                      padding: "1rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    }}>
+                      <div>
+                        <strong>{item.workerName}</strong>
+                        {item.bestFitForGap && <span style={{ color: "#1976d2", marginLeft: "0.5rem" }}>⭐ Best Fit</span>}
+                        <div style={{ fontSize: "0.9rem", color: "#666", marginTop: "0.25rem" }}>
+                          Score: {item.fitScore}% | Trade: {item.tradeFitType} | 
+                          Compliance: <span style={{ color: item.complianceStatus === "compliant" ? "#388e3c" : "#d32f2f" }}>
+                            {item.complianceStatus}
+                          </span>
+                          {item.requiresLicensedTrade && " (⚠️ Licensed required)"}
+                        </div>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => handleAssign(item.workerId)}
+                        style={{
+                          padding: "0.5rem 1.5rem",
+                          background: "#1976d2",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Assign
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     );
   }
 
+  // 🔥 SCHEDULE TAB (construction lookahead)
   function renderSchedule() {
-    if (!schedule) {
-      return <p className="message">Schedule unavailable.</p>;
-    }
+    if (!schedule) return <p style={{ color: "#666" }}>Schedule loading...</p>;
 
     return (
-      <section>
-        <h2>Schedule</h2>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem" }}>
-          <label>Zone View
+      <section style={{ marginTop: "2rem" }}>
+        <h2>📅 3-Week Construction Lookahead</h2>
+        
+        {/* 🔥 VIEW CONTROLS */}
+        <div style={{ 
+          display: "flex", 
+          gap: "1rem", 
+          marginBottom: "1.5rem", 
+          padding: "1rem",
+          background: "#f8f9fa",
+          borderRadius: "8px"
+        }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            Zone: 
             <select value={zoneView} onChange={(e) => setZoneView(e.target.value)}>
               <option value="ROOM">Room</option>
               <option value="FLOOR">Floor</option>
+              <option value="BUILDING">Building</option>
             </select>
           </label>
-          <label>Shift View
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            Shift: 
             <select value={shiftView} onChange={(e) => setShiftView(e.target.value)}>
-              <option value="ALL">All</option>
-              <option value="AM">AM</option>
-              <option value="PM">PM</option>
+              <option value="ALL">All Shifts</option>
+              <option value="AM">AM (6-12)</option>
+              <option value="PM">PM (12-6)</option>
             </select>
           </label>
         </div>
 
-        <article className={`analysis-card ${readinessClass}`}>
-          <h3>Readiness Status: {schedule.readinessStatus}</h3>
+        {/* 🔥 READINESS STATUS */}
+        <article style={{
+          background: readinessClass.includes("low") ? "#e8f5e8" : readinessClass.includes("high") ? "#f8d7da" : "#fff3cd",
+          border: `2px solid ${readinessClass.includes("low") ? "#4caf50" : readinessClass.includes("high") ? "#f44336" : "#ff9800"}`,
+          borderRadius: "12px",
+          padding: "1.5rem",
+          marginBottom: "1.5rem"
+        }}>
+          <h3>🎯 Readiness: {schedule.readinessStatus}</h3>
           {schedule.complianceWarnings?.length > 0 ? (
-            <ul>
+            <ul style={{ margin: "1rem 0", color: "#d32f2f" }}>
               {schedule.complianceWarnings.map((warning, index) => (
-                <li key={`${warning.category}-${index}`}>{warning.message}</li>
+                <li key={index}>{warning.message}</li>
               ))}
             </ul>
           ) : (
-            <p className="message">No compliance warnings.</p>
+            <p style={{ color: "#388e3c" }}>✅ No compliance issues detected</p>
           )}
         </article>
 
-        <h3>3-Week Lookahead</h3>
-        {renderWeekList(appliedAdjustment ? schedule.lookaheadAdjustment?.adjustedLookahead : schedule.lookahead)}
+        {/* 🔥 3-WEEK GANTT CHART */}
+        {renderWeekList(
+          appliedAdjustment 
+            ? schedule.lookaheadAdjustment?.adjustedLookahead 
+            : schedule.lookahead
+        )}
 
-        <h3>Suggested Adjustment</h3>
-        <p className="message">Before vs After resequencing (rule-based)</p>
-        <div className="analysis-card">
-          <strong>Before</strong>
-          {renderWeekList(schedule.lookaheadAdjustment?.originalLookahead || schedule.lookahead)}
-          <strong>After</strong>
-          {renderWeekList(schedule.lookaheadAdjustment?.adjustedLookahead || schedule.lookahead)}
-          <ul>
-            {(schedule.lookaheadAdjustment?.adjustments || []).map((item, idx) => (
-              <li key={`${item.category}-${idx}`}>
-                <strong>{item.category}</strong> → {item.action} ({item.reason})
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => setAppliedAdjustment(true)} disabled={schedule.lookaheadAdjustment?.blocked}>Apply Adjustment</button>
+        {/* 🔥 SCHEDULE ADJUSTMENT */}
+        {schedule.lookaheadAdjustment && (
+          <div style={{ 
+            background: "#e3f2fd", 
+            borderRadius: "12px", 
+            padding: "1.5rem", 
+            margin: "1.5rem 0" 
+          }}>
+            <h3>🤖 AI Schedule Adjustment</h3>
+            <div style={{ display: "flex", gap: "2rem", marginBottom: "1rem" }}>
+              <div><strong>Before:</strong> {renderWeekList(schedule.lookaheadAdjustment.originalLookahead)}</div>
+              <div><strong>After:</strong> {renderWeekList(schedule.lookaheadAdjustment.adjustedLookahead)}</div>
+            </div>
+            <ul style={{ fontSize: "0.95rem" }}>
+              {(schedule.lookaheadAdjustment.adjustments || []).map((item, idx) => (
+                <li key={idx}>
+                  <strong>{item.category}</strong> → {item.action} ({item.reason})
+                </li>
+              ))}
+            </ul>
+            <button 
+              type="button" 
+              onClick={() => setAppliedAdjustment(true)}
+              disabled={schedule.lookaheadAdjustment.blocked}
+              style={{
+                padding: "0.75rem 1.5rem",
+                background: schedule.lookaheadAdjustment.blocked ? "#ccc" : "#1976d2",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                cursor: schedule.lookaheadAdjustment.blocked ? "not-allowed" : "pointer"
+              }}
+            >
+              ✅ Apply AI Adjustment
+            </button>
+          </div>
+        )}
+
+        {/* 🔥 RISK WARNINGS */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "1rem" }}>
+          <article style={{ background: "#fff3cd", padding: "1rem", borderRadius: "8px" }}>
+            <h4>⚠️ Dependency Warnings</h4>
+            <ul style={{ fontSize: "0.9rem" }}>
+              {(schedule.lookaheadAdjustment?.dependencyWarnings || schedule.audit?.dependencyWarnings || [])
+                .map((item, idx) => (
+                  <li key={`dep-${idx}`}>
+                    {item.type === "hard" ? "⛔" : "⚠️"} {item.category}: {item.message}
+                  </li>
+                ))}
+            </ul>
+          </article>
+
+          <article style={{ background: "#f8d7da", padding: "1rem", borderRadius: "8px" }}>
+            <h4>🚨 Safety Conflicts</h4>
+            <ul style={{ fontSize: "0.9rem" }}>
+              {(schedule.lookaheadAdjustment?.safetyConflicts || [])
+                .map((item, idx) => (
+                  <li key={`safe-${idx}`} style={{ color: safetyColor(item.severity) }}>
+                    {item.severity} {item.tradeA} vs {item.tradeB} in {item.zone} ({item.time})
+                  </li>
+                ))}
+            </ul>
+          </article>
         </div>
-
-
-        <h3>Capacity vs Required Work</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.capacityAnalysis || []).map((item) => (
-            <li key={`cap-${item.category}`}>
-              <strong>{item.category}</strong>: workers {item.workers}, capacity {item.capacity}, required {item.requiredWork}, weather-adjusted x{item.weatherMultiplier}, duration {item.adjustedDuration} day(s)
-            </li>
-          ))}
-        </ul>
-
-
-        <h3>Dependency Warnings</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.dependencyWarnings || schedule.audit?.dependencyWarnings || []).map((item, idx) => (
-            <li key={`dep-${idx}`} title={item.message}>
-              {item.type === "hard" ? "⛔" : "⚠️"} {item.category}: {item.message}
-            </li>
-          ))}
-        </ul>
-
-        <h3>Congestion / Trade Stacking</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.congestionWarnings || schedule.audit?.congestionWarnings || []).map((item, idx) => (
-            <li key={`con-${idx}`} title="Congested: >200 SF per worker">⚠️ {item.category}: {item.message}</li>
-          ))}
-        </ul>
-
-        <h3>Fatigue Indicators</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.fatigueWarnings || schedule.audit?.fatigueWarnings || []).map((item, idx) => (
-            <li key={`fat-${idx}`} title="Fatigue: >50 hrs/week">🟠 {item.category || item.workerId}: {item.message}</li>
-          ))}
-        </ul>
-
-        <h3>Safety Conflicts</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.safetyConflicts || []).map((item, idx) => (
-            <li
-              key={`safe-${idx}`}
-              title={`Conflict exists because ${item.tradeA} and ${item.tradeB} overlap in ${item.zone} during ${item.time}.`}
-              style={{ color: safetyColor(item.severity) }}
-            >
-              {item.severity} ({item.action}): {item.tradeA} vs {item.tradeB} in {item.zone} ({item.time})
-            </li>
-          ))}
-        </ul>
-
-        <h3>Zone/Time Conflict Visualization</h3>
-        <ul>
-          {(schedule.lookaheadAdjustment?.spatialConflicts || []).map((item, idx) => (
-            <li key={`sp-${idx}`}>Zone conflict: {item.tradeA} vs {item.tradeB} in {item.zone} ({item.time})</li>
-          ))}
-          {(schedule.lookaheadAdjustment?.temporalConflicts || []).map((item, idx) => (
-            <li key={`tm-${idx}`}>Time conflict: {item.tradeA} vs {item.tradeB} ({item.time})</li>
-          ))}
-        </ul>
-
-        <h3>Actual vs Planned</h3>
-        <ul>
-          {(schedule.audit?.categoryAudits || []).map((item) => (
-            <li
-              key={`${item.category}-${item.plannedWeek}`}
-              title={`Logs used: ${(item.logsUsed || []).join(", ") || "none"} | ${item.explanation}`}
-            >
-              {statusDot(item.status)} <strong>{item.category}</strong> (W{item.plannedWeek}) — planned {item.expectedProgress}% | <span style={{ fontWeight: 700 }}>Weather Adjusted {item.adjustedExpectedProgress}%</span> vs actual {item.actualProgress}% ({item.variance}%)
-              {item.weatherMultiplier < 1 ? ` | weather x${item.weatherMultiplier}` : ""}
-              {item.flags?.length ? ` | Flags: ${item.flags.join(", ")}` : ""}
-            </li>
-          ))}
-        </ul>
-
-        <h3>Trade Coverage</h3>
-        <ul>
-          {schedule.tradeCoverage?.map((entry) => (
-            <li key={entry.category}>
-              <strong>{entry.category}</strong>: {entry.coverageStatus}
-            </li>
-          ))}
-        </ul>
       </section>
     );
   }
 
-  function commandColor(status) {
-    if (status === "GREEN") return "status-green";
-    if (status === "YELLOW") return "status-yellow";
-    return "status-red";
-  }
-
+  // 🔥 COMMAND TAB (merged role-aware)
   function renderCommand() {
-    if (!command) {
-      return <p className="message">Command view unavailable.</p>;
-    }
+    if (!command) return <p style={{ color: "#666" }}>Command loading...</p>;
 
     return (
-      <section>
-        <article className={`analysis-card ${commandColor(command.health?.status)}`}>
-          <h2>Health Score: {command.health?.score ?? 0}</h2>
-          <p><strong>Status:</strong> {command.health?.status || "RED"}</p>
-          <p><strong>Project losing:</strong> ${Number(command.financial?.dailyLoss || 0).toLocaleString()}/day</p>
-        </article>
-
-        <article className="analysis-card status-red">
-          <h3>Financial Impact</h3>
-          <p>Daily Loss: ${Number(command.financial?.dailyLoss || 0).toLocaleString()}</p>
-          <p>Weekly Projection: ${Number(command.financial?.weeklyProjection || 0).toLocaleString()}</p>
-          <ul>
-            {(command.financial?.topDrivers || []).slice(0, 3).map((driver, idx) => (
-              <li key={`driver-${idx}`}>{driver.description} (${Number(driver.dailyImpactUsd || 0).toLocaleString()}/day)</li>
-            ))}
-          </ul>
-        </article>
-
-        <article className="analysis-card status-yellow">
-          <h3>Execution Status</h3>
-          <p>Schedule Drift: {command.execution?.scheduleDriftDays || 0} days</p>
-          <p>Readiness: {command.execution?.readinessPercent || 0}%</p>
-          <p>Missing Work: {command.execution?.missingWorkCount || 0}</p>
-          <p>Delayed Trades: {command.execution?.delayedCategoriesCount || 0}</p>
-        </article>
-
-        <article className="analysis-card status-yellow">
-          <h3>Risks</h3>
-          <p>Escalations: {command.risks?.escalationsCount || 0}</p>
-          <p>Hard Locks: {command.risks?.hardLocksCount || 0}</p>
-          <p>Congestion Warnings: {command.risks?.congestionWarnings || 0}</p>
-          <p>Safety Flags: {command.risks?.safetyFlags || 0}</p>
-        </article>
-
-        <article className="analysis-card status-green">
-          <h3>Automation</h3>
-          <p>AI resolved {command.automation?.autoResolutionsCount || 0} issues.</p>
-          <p>{command.automation?.pendingOverridesCount || 0} decisions need approval.</p>
-          <p>{command.automation?.pendingEscalationsCount || 0} escalations pending.</p>
-        </article>
-
-        <article className="analysis-card status-red">
-          <h3>Forecast</h3>
-          <p>At current pace: +{command.forecast?.projectedDelayDays || 0} days delay</p>
-          <p>Projected loss: ${Number(command.forecast?.projectedLoss || 0).toLocaleString()}</p>
-        </article>
-
-        <article className="analysis-card status-yellow">
-          <h3>Action Queue</h3>
-          <ul>
-            {(command.actions || []).map((action, idx) => (
-              <li key={`action-${idx}`}>
-                <strong>{action.type}</strong> [{action.severity}] — {action.description}
-                <br />
-                Required: {action.requiredAction}
-              </li>
-            ))}
-          </ul>
-        </article>
+      <section style={{ marginTop: "2rem" }}>
+        <CommandTab command={command} role={role} />
+        
+        {/* 🔥 QUICK ACTIONS */}
+        <div style={{ 
+          display: "flex", 
+          gap: "1rem", 
+          marginTop: "2rem", 
+          padding: "1.5rem",
+          background: "#f8f9fa",
+          borderRadius: "12px"
+        }}>
+          <Link 
+            to={`/job-matches/${jobId}`} 
+            style={{
+              padding: "1rem 2rem",
+              background: "#388e3c",
+              color: "white",
+              textDecoration: "none",
+              borderRadius: "8px",
+              fontWeight: "bold"
+            }}
+          >
+            👥 View Worker Matches ({command.matchPool?.totalMatches || 0})
+          </Link>
+          {command.actions?.length > 0 && (
+            <button style={{
+              padding: "1rem 2rem",
+              background: command.health.status === "GREEN" ? "#4caf50" : "#ff9800",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: "bold",
+              cursor: "pointer"
+            }}>
+              🎯 Execute Top Action ({command.actions[0]?.priority})
+            </button>
+          )}
+        </div>
       </section>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        textAlign: "center", 
+        padding: "4rem 2rem", 
+        color: "#666" 
+      }}>
+        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🏗️</div>
+        <h2>Loading Construction Command Center...</h2>
+        <p>AI analyzing schedule, risks, and profit impact</p>
+      </div>
     );
   }
 
   return (
-    <>
-      <h1>Job Detail #{jobId}</h1>
-      <p>
-        <Link to="/contractor-dashboard">Back to Contractor Dashboard</Link>
-      </p>
-
-      {job ? (
-        <section>
-          <h2>{job.title}</h2>
-          <p>{job.description}</p>
-          <p>
-            Site ZIP: {job.site_zip || "n/a"} · Schedule: {new Date(job.starts_at).toLocaleString()} to {new Date(job.ends_at).toLocaleString()}
-          </p>
-        </section>
-      ) : null}
-
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
-        <button type="button" onClick={() => setActiveTab("recommendations")}>Recommendations</button>
-        <button type="button" onClick={() => setActiveTab("schedule")}>Schedule</button>
-        <button type="button" onClick={() => setActiveTab("command")}>Command</button>
-      </div>
-
-      {activeTab === "recommendations" ? renderRecommendations() : activeTab === "schedule" ? renderSchedule() : renderCommand()}
-
-      {showSafetyModal ? (
-        <div className="analysis-card severity-high">
-          <h3>Safety Conflict</h3>
-          <p>{schedule?.lookaheadAdjustment?.error || "Cannot schedule conflicting trades in same zone."}</p>
-          <p className="message">Conflict occurs in Zone: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.zone || "N/A"}</p>
-          <p className="message">Time: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.time || "N/A"}</p>
-          <p className="message">Distance Risk: {schedule?.lookaheadAdjustment?.safetyConflicts?.[0]?.message || "Trade separation rule triggered."}</p>
-          <button type="button" onClick={() => setShowSafetyModal(false)}>Cancel</button>
-          <button
-            type="button"
-            onClick={() => setShowSafetyModal(false)}
-            disabled={auth.role !== "contractor"}
-            style={{ marginLeft: "0.5rem" }}
-          >
-            Override
-          </button>
-        </div>
-      ) : null}
-
-      {message ? <p className="message">{message}</p> : null}
-    </>
-  );
-}
+    <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "0 1rem" }}>
+      {/* 🔥 HEADER */}
+      <nav style={{ 
+        padding: "1rem 0", 
+        marginBottom: "2rem",
+        borderBottom: "1px solid #eee"
+      }}>
+        <Link 
+          to="/contractor-dashboard" 
+          style={{ 
+            color: "#1976d2", 
+            textDecoration: "none", 
+            fontWeight: "bold",
+            padding: "0.75rem 1.5rem",
+            background: "#e3f2fd",
+            borderRadius: "8px"
+          }}
+        >
+          ← Back to Dashboard
+        </Link>
+      </
+      
+      
