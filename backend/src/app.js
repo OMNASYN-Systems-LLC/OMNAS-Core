@@ -19,6 +19,7 @@ import { escalationsRouter } from "./modules/escalations/routes.js";
 import { financialRouter } from "./modules/financial/financial.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { assemblerRouter } from "./modules/assembler/routes.js";
+import { calendarRouter } from "./modules/calendar/calendar.routes.js";
 import { registerHandlers } from "./orchestrator/registerHandlers.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -47,6 +48,7 @@ app.use("/api/assignments", assignmentLogsRouter);
 app.use("/api/logs", logsRouter);
 app.use("/api/opportunities", opportunitiesRouter);
 app.use("/api/escalations", escalationsRouter);
+app.use("/api/calendar", calendarRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

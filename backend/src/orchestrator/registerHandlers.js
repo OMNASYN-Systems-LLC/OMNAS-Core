@@ -1,4 +1,5 @@
 import eventBus from "../infrastructure/events/eventBus.js";
+import { handleAssignmentAccepted } from "./handlers/calendar.handler.js";
 
 export function registerHandlers() {
   eventBus.on("ON_ASSIGNMENT_ACCEPTED", (payload) => {
@@ -7,6 +8,7 @@ export function registerHandlers() {
       jobId: payload.jobId,
       workerUserId: payload.workerUserId
     });
+    handleAssignmentAccepted(payload);
   });
 
   eventBus.on("ON_GHOST_DETECTED", (payload) => {
