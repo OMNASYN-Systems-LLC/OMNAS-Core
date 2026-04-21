@@ -22,6 +22,9 @@ import { schedulingRouter } from "./modules/scheduling/routes.js";
 import { escalationsRouter } from "./modules/escalations/routes.js";
 import { financialRouter } from "./modules/financial/financial.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { actionsRouter } from "./modules/actions/actions.routes.js";
+import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -63,6 +66,8 @@ app.use("/api/jobs/recommendations", recommendationsRouter);  // OMNAS AI
 app.use("/api/jobs/scheduling", schedulingRouter);   // Construction scheduling
 app.use("/api/jobs/financial", financialRouter);     // Profit erosion
 app.use("/api/jobs/analytics", analyticsRouter);     // Pivot dashboard data
+app.use("/api/jobs", dashboardRouter);               // Aggregation dashboard
+app.use("/api/jobs", assemblerRouter);               // Auto-fill engine
 
 // 🔥 ASSIGNMENTS + LOGGING (construction field ops)
 app.use("/api/assignments", assignmentsRouter);
@@ -72,6 +77,9 @@ app.use("/api/logs", logsRouter);                    // Voice + execution logs
 // 🔥 OPPORTUNITIES + ESCALATIONS
 app.use("/api/opportunities", opportunitiesRouter);
 app.use("/api/escalations", escalationsRouter);      // Safety + issue escalation
+
+// 🔥 ACTIONS / DIRECTIVES
+app.use("/api/actions", actionsRouter);              // Draft directive system
 
 // 🔥 ERROR HANDLING
 app.use(notFoundHandler);

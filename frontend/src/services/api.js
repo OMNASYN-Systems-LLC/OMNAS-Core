@@ -106,6 +106,23 @@ export function getJobCommand(id, auth) {
   return request(`/jobs/${id}/command`, { auth });
 }
 
+export function getJobDashboard(id, auth) {
+  return request(`/jobs/${id}/dashboard`, { auth });
+}
+
+// 🔥 ACTIONS / DIRECTIVES
+export function draftDirective(payload, auth) {
+  return request("/actions/draft", { method: "POST", payload, auth });
+}
+
+export function listDirectives(jobId, auth) {
+  return request(`/actions?jobId=${jobId}`, { auth });
+}
+
+export function updateDirectiveStatus(id, status, auth) {
+  return request(`/actions/${id}/status`, { method: "PATCH", payload: { status }, auth });
+}
+
 // 🔥 ASSIGNMENTS
 export function createAssignment(payload, auth) {
   return request("/assignments", { method: "POST", payload, auth });

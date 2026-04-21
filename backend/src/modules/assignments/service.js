@@ -1,5 +1,6 @@
 import {
   createAssignment,
+  createAssignmentsBatch,
   getAssignmentById,
   getAssignmentByJobAndWorker,
   listAssignmentsForContractor,
@@ -131,6 +132,24 @@ export async function completeAssignment(id, authUser) {
   ensureStatus(assignment, ["active"]);
 
   return updateAssignmentStatus(id, "completed", { completedAt: new Date().toISOString() });
+}
+
+// Creates multiple offered assignments for a job in one transaction.
+// Silently skips workers that already have a live assignment on this job.
+export async function createBatchAssignmentOffers(contractorUserId, jobId, workerUserIds) {
+  assertNonNegativeInteger(jobId, "jobId");
+
+  if (!Array.isArray(workerUserIds) || workerUserIds.length === 0) {
+    return { created: [], skipped: [] };
+  }
+
+  const records = workerUserIds.map((workerUserId) => ({
+    jobId,
+    workerUserId,
+    assignedBy: contractorUserId,
+  }));
+
+  return createAssignmentsBatch(records);
 }
 
 export async function listAssignments(authUser) {

@@ -78,6 +78,25 @@ export async function listWorkerPerformance() {
   };
 }
 
+export async function getRankedMatchScoresFromCache(jobId) {
+  const { rows } = await db.query(
+    `SELECT
+       ms.worker_user_id,
+       ms.score         AS total_score,
+       ms.performance_score,
+       ms.score_breakdown,
+       wp.first_name,
+       wp.last_name,
+       wp.trade_primary
+     FROM match_scores ms
+     JOIN worker_profiles wp ON wp.user_id = ms.worker_user_id
+     WHERE ms.job_id = $1
+     ORDER BY ms.score DESC`,
+    [jobId]
+  );
+  return rows;
+}
+
 export async function replaceMatchScores(jobId, matches) {
   const client = await db.connect();
 
