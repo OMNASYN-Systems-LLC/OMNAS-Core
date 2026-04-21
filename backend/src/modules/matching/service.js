@@ -53,7 +53,10 @@ function computeLocationScore(job, worker) {
   return job.site_zip && worker.home_zip && job.site_zip === worker.home_zip ? 10 : 0; // 5% weight
 }
 
-function computePerformanceScore(performance) {
+// reliabilityScore: stored NUMERIC(5,3) from worker_profiles, or null if not yet computed.
+// When present it contributes up to 5 points as a reliability bonus, keeping the
+// overall scale stable (max ≈ 125 → max ≈ 125 since the base is already 20 pts max).
+function computePerformanceScore(performance, reliabilityScore) {
   const totalAssignments = Number(performance?.total_assignments ?? 0);
   const totalCompleted = Number(performance?.total_jobs_completed ?? 0);
   const totalHours = Number(performance?.total_hours_logged ?? 0);
@@ -64,10 +67,16 @@ function computePerformanceScore(performance) {
   const completionRate = totalAssignments > 0 ? totalCompleted / totalAssignments : 0;
   const consistency = Math.max(0, 1 - stddev / 8);
   const logReliability = totalAssignments > 0 ? Math.min(1, logsCount / totalAssignments) : 0;
-  const score = completionRate * 12 + consistency * 4 + logReliability * 4;
+  const baseScore = completionRate * 12 + consistency * 4 + logReliability * 4;
+
+  // Reliability bonus: stored score (0–1) mapped to 0–5 pts.
+  // Absent score is neutral — does not penalise new workers.
+  const reliabilityBonus = reliabilityScore != null ? Number(reliabilityScore) * 5 : 0;
+  const score = baseScore + reliabilityBonus;
 
   return {
     performance_score: round(score),
+    reliability_score: reliabilityScore ?? null,
     metrics: {
       total_jobs_completed: totalCompleted,
       total_hours_logged: round(totalHours),
@@ -190,7 +199,10 @@ export async function getJobMatches(jobId, contractorUserId) {
     const skill_score = computeSkillScore(job.requiredSkills, skills);
     const availability_score = computeAvailabilityScore(job, availability);
     const location_score = computeLocationScore(job, worker);
-    const { performance_score, metrics } = computePerformanceScore(perfByWorker.get(worker.user_id));
+    const { performance_score, reliability_score, metrics } = computePerformanceScore(
+      perfByWorker.get(worker.user_id),
+      worker.reliability_score != null ? Number(worker.reliability_score) : null
+    );
 
     // 🔥 TRADE INTELLIGENCE (15% weight - construction SOTA!)
     const workerCategories = getWorkerCategorySet(worker, skills);
@@ -222,6 +234,7 @@ export async function getJobMatches(jobId, contractorUserId) {
       score: total_score,
       total_score,
       performance_score,
+      reliability_score,
       // 🔥 TRADE COMPLIANCE (construction critical!)
       tradeFitType: tradeFit.tradeFitType,
       complianceStatus: tradeFit.complianceStatus,
@@ -231,6 +244,7 @@ export async function getJobMatches(jobId, contractorUserId) {
         availability_score,
         location_score,
         performance_score,
+        reliability_score,
         trade_adjacency_score: tradeFit.trade_adjacency_score,
         total_score
       }

@@ -8,6 +8,7 @@ import {
   updateAssignmentStatus
 } from "./repository.js";
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
+import { recomputeReliability } from "../reliability/reliability.service.js";
 
 function ensureStatus(assignment, allowed) {
   if (!allowed.includes(assignment.status)) {
@@ -131,7 +132,12 @@ export async function completeAssignment(id, authUser) {
 
   ensureStatus(assignment, ["active"]);
 
-  return updateAssignmentStatus(id, "completed", { completedAt: new Date().toISOString() });
+  const completed = await updateAssignmentStatus(id, "completed", { completedAt: new Date().toISOString() });
+
+  // Fire-and-forget: update reliability score without blocking the response
+  recomputeReliability(assignment.worker_user_id).catch(() => {});
+
+  return completed;
 }
 
 // Creates multiple offered assignments for a job in one transaction.

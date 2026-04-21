@@ -25,6 +25,7 @@ import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { actionsRouter } from "./modules/actions/actions.routes.js";
 import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
+import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -55,6 +56,7 @@ app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 // 🔥 API ROUTES - CORE
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/workers", reliabilityRouter);          // GET /:id/reliability (contractor + worker)
 app.use("/api/workers", workerRouter);
 app.use("/api/contractors", contractorRouter);
 app.use("/api/skills", skillsRouter);
