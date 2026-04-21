@@ -176,8 +176,41 @@ export async function listGhostableAcceptedAssignments() {
   return rows;
 }
 
+export async function findAcceptedAndLate(thresholdMinutes = 15) {
+  const minutes = Math.max(1, Number(thresholdMinutes || 15));
+  const query = `
+    SELECT a.id,
+           a.job_id,
+           a.worker_user_id,
+           a.assigned_by,
+           j.starts_at,
+           EXTRACT(EPOCH FROM (NOW() - j.starts_at)) / 60 AS minutes_late
+    FROM assignments a
+    JOIN jobs j ON j.id = a.job_id
+    WHERE a.status = 'accepted'
+      AND j.starts_at <= NOW() - ($1::TEXT || ' minutes')::INTERVAL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM daily_logs dl
+        WHERE dl.assignment_id = a.id
+          AND COALESCE(dl.is_draft, FALSE) = FALSE
+          AND (
+            LOWER(COALESCE(dl.work_summary, '')) LIKE '%check_in%'
+            OR LOWER(COALESCE(dl.work_summary, '')) LIKE '%shift_start%'
+            OR LOWER(COALESCE(dl.work_completed, '')) LIKE '%check_in%'
+            OR LOWER(COALESCE(dl.work_completed, '')) LIKE '%shift_start%'
+          )
+      )
+  `;
+  const { rows } = await db.query(query, [String(minutes)]);
+  return rows;
+}
+
 export async function markAssignmentGhosted(id) {
-  const { rows } = await db.query("UPDATE assignments SET status = 'ghosted', updated_at = NOW() WHERE id = $1 RETURNING *", [id]);
+  const { rows } = await db.query(
+    "UPDATE assignments SET status = 'ghosted', updated_at = NOW() WHERE id = $1 AND status = 'accepted' RETURNING *",
+    [id]
+  );
   return rows[0] ?? null;
 }
 
