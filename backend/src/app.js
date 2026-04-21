@@ -19,9 +19,11 @@ import { escalationsRouter } from "./modules/escalations/routes.js";
 import { financialRouter } from "./modules/financial/financial.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { assemblerRouter } from "./modules/assembler/routes.js";
+import { registerHandlers } from "./orchestrator/registerHandlers.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
+registerHandlers();
 
 app.use(helmet());
 app.use(cors({ origin: env.frontendUrl }));
