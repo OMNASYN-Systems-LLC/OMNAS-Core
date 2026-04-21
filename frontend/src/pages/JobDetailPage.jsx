@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { createAssignment, getJobDashboard } from "../services/api.js";
+import { draftDirective, getJobDashboard, listDirectives } from "../services/api.js";
 import { CommandTab } from "../components/CommandTab.jsx";
 
 const CONTRACTOR_AUTH = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
@@ -17,6 +17,19 @@ export function JobDetailPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // directivesByActionId: { [actionId]: directive }
+  const [directivesByActionId, setDirectivesByActionId] = useState({});
+  // Set of actionIds whose send is in-flight
+  const [sendingActionIds, setSendingActionIds] = useState(new Set());
+
+  const messageTimer = useRef(null);
+
+  function showMessage(text) {
+    if (messageTimer.current) clearTimeout(messageTimer.current);
+    setMessage(text);
+    messageTimer.current = setTimeout(() => setMessage(""), 5000);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -24,9 +37,20 @@ export function JobDetailPage() {
       setLoading(true);
       setError("");
       try {
-        const response = await getJobDashboard(jobId, auth);
+        const [dashRes, dirRes] = await Promise.all([
+          getJobDashboard(jobId, auth),
+          listDirectives(jobId, auth).catch(() => null),
+        ]);
+
         if (!cancelled) {
-          setDashboard(response?.data ?? null);
+          setDashboard(dashRes?.data ?? null);
+
+          // Index directives by actionId — last one wins if duplicates exist
+          const byActionId = {};
+          for (const d of (dirRes?.data ?? [])) {
+            byActionId[d.actionId] = d;
+          }
+          setDirectivesByActionId(byActionId);
         }
       } catch (err) {
         if (!cancelled) {
@@ -41,6 +65,36 @@ export function JobDetailPage() {
     return () => { cancelled = true; };
   }, [jobId, role]);
 
+  const handleSendDirective = useCallback(async (action) => {
+    if (sendingActionIds.has(action.id)) return;
+
+    setSendingActionIds((prev) => new Set([...prev, action.id]));
+    try {
+      const res = await draftDirective(
+        {
+          jobId: Number(jobId),
+          actionId: action.id,
+          message: action.label,
+          targetRole: "contractor",
+        },
+        auth
+      );
+      const directive = res?.data?.directive;
+      if (directive) {
+        setDirectivesByActionId((prev) => ({ ...prev, [action.id]: directive }));
+        showMessage(`Recommendation sent (${directive.status})`);
+      }
+    } catch (err) {
+      showMessage(`Failed to send: ${err.message}`);
+    } finally {
+      setSendingActionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(action.id);
+        return next;
+      });
+    }
+  }, [jobId, auth, sendingActionIds]);
+
   function switchRole(nextRole) {
     const params = new URLSearchParams(searchParams);
     if (nextRole === "client") {
@@ -49,16 +103,6 @@ export function JobDetailPage() {
       params.delete("role");
     }
     setSearchParams(params, { replace: true });
-  }
-
-  async function handleAssign(workerId) {
-    try {
-      await createAssignment({ jobId: Number(jobId), workerUserId: workerId }, auth);
-      setMessage("Assignment offer sent to worker!");
-      setTimeout(() => setMessage(""), 5000);
-    } catch (err) {
-      setMessage(`Error: ${err.message}`);
-    }
   }
 
   if (loading) {
@@ -174,16 +218,22 @@ export function JobDetailPage() {
             padding: "0.75rem 1rem",
             marginBottom: "1rem",
             borderRadius: "6px",
-            background: message.startsWith("Error") ? "#fdecea" : "#e8f5e8",
-            color: message.startsWith("Error") ? "#d32f2f" : "#388e3c",
+            background: message.startsWith("Failed") ? "#fdecea" : "#e8f5e8",
+            color: message.startsWith("Failed") ? "#d32f2f" : "#388e3c",
           }}
         >
           {message}
         </div>
       )}
 
-      {/* Dashboard */}
-      <CommandTab dashboard={dashboard} role={role} />
+      {/* Dashboard + directive wiring */}
+      <CommandTab
+        dashboard={dashboard}
+        role={role}
+        directivesByActionId={directivesByActionId}
+        onSendDirective={handleSendDirective}
+        sendingActionIds={sendingActionIds}
+      />
 
       {/* Quick actions */}
       {role === "contractor" && dashboard && (

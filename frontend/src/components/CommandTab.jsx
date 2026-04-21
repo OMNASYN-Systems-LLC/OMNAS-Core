@@ -8,6 +8,13 @@ const TONE = {
   neutral: "#64748b",
 };
 
+const STATUS_BADGE = {
+  pending: { label: "pending", bg: "#fef9c3", color: "#854d0e" },
+  sent:    { label: "sent",    bg: "#dbeafe", color: "#1e40af" },
+  responded: { label: "responded", bg: "#dcfce7", color: "#166534" },
+  ignored: { label: "ignored", bg: "#f3f4f6", color: "#6b7280" },
+};
+
 function toneFor(metric, value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "neutral";
   const n = Number(value);
@@ -57,6 +64,63 @@ function plainConfidence(score) {
   if (score >= 80) return "Likely to hit deadline";
   if (score >= 60) return "Tight — needs attention";
   return "Unlikely to hit deadline";
+}
+
+function StatusBadge({ status }) {
+  const badge = STATUS_BADGE[status] ?? STATUS_BADGE.pending;
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "0.15rem 0.55rem",
+        borderRadius: "999px",
+        fontSize: "0.72rem",
+        fontWeight: 600,
+        background: badge.bg,
+        color: badge.color,
+        letterSpacing: "0.02em",
+        textTransform: "uppercase",
+        flexShrink: 0,
+      }}
+    >
+      {badge.label}
+    </span>
+  );
+}
+
+function SendButton({ action, directive, onSend, sending }) {
+  if (directive) {
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <StatusBadge status={directive.status} />
+      </span>
+    );
+  }
+
+  if (action.id === "all-clear") return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSend(action)}
+      disabled={sending}
+      style={{
+        padding: "0.3rem 0.85rem",
+        borderRadius: "6px",
+        border: "1px solid currentColor",
+        background: "transparent",
+        cursor: sending ? "not-allowed" : "pointer",
+        fontSize: "0.8rem",
+        fontWeight: 600,
+        color: "#1d4ed8",
+        opacity: sending ? 0.5 : 1,
+        flexShrink: 0,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {sending ? "Sending…" : "Send Recommendation"}
+    </button>
+  );
 }
 
 function HeroStrip({ dashboard }) {
@@ -134,10 +198,15 @@ function CausePanel({ cause }) {
   );
 }
 
-function ActionPanel({ action }) {
+// directivesByActionId: { [actionId]: directive }
+// onSend: (action) => void
+// sending: Set of actionIds currently in-flight
+function ActionPanel({ action, directivesByActionId, onSend, sending }) {
   const list = action ?? [];
   const urgent = list.filter((a) => ["high", "critical"].includes(a.priority));
-  const suggested = list.filter((a) => !["high", "critical"].includes(a.priority) && a.id !== "all-clear");
+  const suggested = list.filter(
+    (a) => !["high", "critical"].includes(a.priority) && a.id !== "all-clear"
+  );
   const allClear = list.length === 1 && list[0].id === "all-clear";
 
   if (allClear) {
@@ -148,6 +217,30 @@ function ActionPanel({ action }) {
         </header>
         <p className="dash-empty">No decisions required — system is stable.</p>
       </section>
+    );
+  }
+
+  function renderItem(a, colClass) {
+    const directive = directivesByActionId?.[a.id] ?? null;
+    const isSending = sending?.has(a.id) ?? false;
+
+    return (
+      <li key={a.id} className={`action-item${colClass ? ` ${colClass}` : ""}`}>
+        <span className="action-text">{a.label}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+          {a.route ? (
+            <Link to={a.route} className="action-btn action-btn-ghost" style={{ fontSize: "0.8rem" }}>
+              {a.cta}
+            </Link>
+          ) : null}
+          <SendButton
+            action={a}
+            directive={directive}
+            onSend={onSend}
+            sending={isSending}
+          />
+        </span>
+      </li>
     );
   }
 
@@ -162,14 +255,7 @@ function ActionPanel({ action }) {
           {suggested.length === 0 ? (
             <p className="dash-empty">No recommendations.</p>
           ) : (
-            <ul className="action-list">
-              {suggested.map((a) => (
-                <li key={a.id} className="action-item">
-                  <span className="action-text">{a.label}</span>
-                  {a.cta ? <ActionButton action={a} variant="ghost" /> : null}
-                </li>
-              ))}
-            </ul>
+            <ul className="action-list">{suggested.map((a) => renderItem(a, ""))}</ul>
           )}
         </div>
         <div className="action-col action-col-approval">
@@ -177,33 +263,11 @@ function ActionPanel({ action }) {
           {urgent.length === 0 ? (
             <p className="dash-empty">No pending approvals.</p>
           ) : (
-            <ul className="action-list">
-              {urgent.map((a) => (
-                <li key={a.id} className="action-item action-item-urgent">
-                  <span className="action-text">{a.label}</span>
-                  {a.cta ? <ActionButton action={a} variant="primary" /> : null}
-                </li>
-              ))}
-            </ul>
+            <ul className="action-list">{urgent.map((a) => renderItem(a, "action-item-urgent"))}</ul>
           )}
         </div>
       </div>
     </section>
-  );
-}
-
-function ActionButton({ action, variant }) {
-  if (action.route) {
-    return (
-      <Link to={action.route} className={`action-btn action-btn-${variant}`}>
-        {action.cta}
-      </Link>
-    );
-  }
-  return (
-    <span className={`action-btn action-btn-${variant} action-btn-disabled`}>
-      {action.cta}
-    </span>
   );
 }
 
@@ -307,7 +371,10 @@ function ClientView({ dashboard }) {
   );
 }
 
-export function CommandTab({ dashboard, role }) {
+// directivesByActionId: map of actionId → directive (from parent)
+// onSendDirective: async (action) => void
+// sendingActionIds: Set<string>
+export function CommandTab({ dashboard, role, directivesByActionId, onSendDirective, sendingActionIds }) {
   if (!dashboard) {
     return <p className="message">No dashboard data available.</p>;
   }
@@ -320,7 +387,12 @@ export function CommandTab({ dashboard, role }) {
     <div className="command-dashboard">
       <HeroStrip dashboard={dashboard} />
       <CausePanel cause={dashboard.cause} />
-      <ActionPanel action={dashboard.action} />
+      <ActionPanel
+        action={dashboard.action}
+        directivesByActionId={directivesByActionId ?? {}}
+        onSend={onSendDirective ?? (() => {})}
+        sending={sendingActionIds ?? new Set()}
+      />
       <ExecutionPanel execution={dashboard.execution} />
       <ForecastPanel forecast={dashboard.forecast} />
     </div>

@@ -23,6 +23,7 @@ import { escalationsRouter } from "./modules/escalations/routes.js";
 import { financialRouter } from "./modules/financial/financial.routes.js";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { actionsRouter } from "./modules/actions/actions.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
@@ -74,6 +75,9 @@ app.use("/api/logs", logsRouter);                    // Voice + execution logs
 // 🔥 OPPORTUNITIES + ESCALATIONS
 app.use("/api/opportunities", opportunitiesRouter);
 app.use("/api/escalations", escalationsRouter);      // Safety + issue escalation
+
+// 🔥 ACTIONS / DIRECTIVES
+app.use("/api/actions", actionsRouter);              // Draft directive system
 
 // 🔥 ERROR HANDLING
 app.use(notFoundHandler);
