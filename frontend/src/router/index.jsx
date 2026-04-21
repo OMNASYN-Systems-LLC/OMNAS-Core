@@ -3,6 +3,7 @@ import { AuthLayout } from "../components/AuthLayout.jsx";
 import { ContractorDashboardPage } from "../pages/ContractorDashboardPage.jsx";
 import { ContractorProfilePage } from "../pages/ContractorProfilePage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
+import { JobDetailPage } from "../pages/JobDetailPage.jsx";
 import { MatchesPage } from "../pages/MatchesPage.jsx";
 import { OpportunitiesPage } from "../pages/OpportunitiesPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
@@ -49,6 +50,10 @@ export const router = createBrowserRouter([
       {
         path: "job-matches/:jobId",
         element: <MatchesPage />
+      },
+      {
+        path: "jobs/:jobId",
+        element: <JobDetailPage />
       }
     ]
   }

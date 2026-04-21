@@ -13,6 +13,7 @@ import { matchingRouter } from "./modules/matching/routes.js";
 import { assignmentsRouter } from "./modules/assignments/routes.js";
 import { assignmentLogsRouter, logsRouter } from "./modules/logs/routes.js";
 import { opportunitiesRouter } from "./modules/opportunities/routes.js";
+import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export const app = express();
@@ -28,6 +29,7 @@ app.use("/api/workers", workerRouter);
 app.use("/api/contractors", contractorRouter);
 app.use("/api/skills", skillsRouter);
 app.use("/api/jobs", matchingRouter);
+app.use("/api/jobs", analyticsRouter);
 app.use("/api/jobs", jobsRouter);
 app.use("/api/assignments", assignmentsRouter);
 app.use("/api/assignments", assignmentLogsRouter);
