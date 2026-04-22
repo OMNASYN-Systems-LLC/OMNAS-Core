@@ -27,6 +27,7 @@ import { actionsRouter } from "./modules/actions/actions.routes.js";
 import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
 import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
 import { calendarRouter } from "./modules/calendar/calendar.routes.js";
+import { documentsRouter } from "./modules/documents/documents.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { registerHandlers } from "./orchestrator/registerHandlers.js";
@@ -87,6 +88,9 @@ app.use("/api/actions", actionsRouter);              // Draft directive system
 
 // 🔥 CALENDAR
 app.use("/api/calendar", calendarRouter);            // Shift blocks + event log
+
+// 🔥 DOCUMENTS (Pack 01)
+app.use("/api/docs", documentsRouter);               // Document management foundation
 
 // 🔥 ORCHESTRATOR — event-driven recovery handlers (ghost, assignment, calendar)
 registerHandlers();
