@@ -1,4 +1,4 @@
-import { fetchOpportunities } from "../../clients/samGovClient.js";
+import { fetchOpportunities } from "../../infrastructure/clients/samGovClient.js";
 import {
   getOpportunityById,
   importOpportunityToJob,

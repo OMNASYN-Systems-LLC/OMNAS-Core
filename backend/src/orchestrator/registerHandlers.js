@@ -3,17 +3,17 @@ import { handleAssignmentAccepted } from "./handlers/calendar.handler.js";
 import { handleGhostDetected } from "./handlers/ghost.handler.js";
 
 export function registerHandlers() {
-  // ON_ASSIGNMENT_ACCEPTED → create calendar shift block (Pack A)
+  // ON_ASSIGNMENT_ACCEPTED → create calendar shift block
   eventBus.on(EVENTS.ON_ASSIGNMENT_ACCEPTED, async (payload) => {
     console.log("[Orchestrator] ON_ASSIGNMENT_ACCEPTED", {
       assignmentId: payload.assignmentId,
-      jobId:        payload.jobId,
-      workerUserId: payload.workerUserId
+      jobId: payload.jobId,
+      workerUserId: payload.workerUserId,
     });
     await handleAssignmentAccepted(payload);
   });
 
-  // ON_GHOST_DETECTED → emergency replacement sequence (Pack C)
+  // ON_GHOST_DETECTED → emergency replacement sequence
   eventBus.on(EVENTS.ON_GHOST_DETECTED, async (payload) => {
     console.log("[Orchestrator] ON_GHOST_DETECTED:", JSON.stringify(payload));
     try {
@@ -23,7 +23,7 @@ export function registerHandlers() {
     }
   });
 
-  // Stubs — reserved for future packs
+  // Reserved for future packs
   eventBus.on(EVENTS.ON_MEETING_UPLOADED, (payload) => {
     console.log("[Orchestrator] ON_MEETING_UPLOADED", payload);
   });
