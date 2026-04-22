@@ -7,6 +7,7 @@ import {
 } from "./repository.js";
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
 import { recomputeReliability } from "../reliability/reliability.service.js";
+import { checkCheckinEligibility } from "../compliance/compliance.service.js";
 
 // 🔥 AUTHORIZATION
 function ensureAssignmentAccess(assignment, authUser) {
@@ -97,6 +98,12 @@ export async function submitDailyLog(assignmentId, workerUserId, payload) {
   assertNonNegativeInteger(assignmentId, "assignmentId");
   assertRequiredFields(payload, ["logDate", "hoursWorked", "workSummary"]);
 
+  // Phase B: block check-in when the worker's company is suspended or credentials are expired.
+  // Draft submissions bypass the guard so workers can still capture notes offline.
+  if (!payload.isDraft) {
+    await checkCheckinEligibility(workerUserId, assignmentId);
+  }
+
   const assignment = await validateAssignmentForWorker(assignmentId, workerUserId);
 
   // Hours validation
@@ -174,6 +181,13 @@ export async function submitVoiceLog(workerUserId, payload) {
   assertRequiredFields(payload, ["assignmentId"]);
 
   const assignmentId = Number(payload.assignmentId);
+
+  // Phase B: apply check-in guard for non-draft voice submissions.
+  const isDraft = payload.isDraft ?? true; // voice logs default to draft
+  if (!isDraft) {
+    await checkCheckinEligibility(workerUserId, assignmentId);
+  }
+
   const assignment = await validateAssignmentForWorker(assignmentId, workerUserId);
 
   // 🔥 VOICE TRANSCRIPTION + AI CATEGORIES

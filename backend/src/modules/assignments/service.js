@@ -11,6 +11,7 @@ import {
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
 import { recomputeReliability } from "../reliability/reliability.service.js";
 import eventBus from "../../infrastructure/events/eventBus.js";
+import { checkAcceptanceEligibility } from "../compliance/compliance.service.js";
 
 function ensureStatus(assignment, allowed) {
   if (!allowed.includes(assignment.status)) {
@@ -68,7 +69,12 @@ export async function getAssignmentDetails(id, authUser) {
 // Uses a transactional FOR-UPDATE accept with expiry check (safer than
 // a two-step fetch + update). Emits ON_ASSIGNMENT_ACCEPTED so the calendar
 // handler can create a shift block.
+// Phase B: blocks acceptance when the worker's affiliated company is not ACTIVE.
 export async function acceptAssignment(id, workerUserId) {
+  // Compliance gate — throws 403 with a reason code when the company is not ACTIVE.
+  // Solo workers (no affiliation) pass through unaffected.
+  await checkAcceptanceEligibility(workerUserId, id);
+
   const assignment = await acceptOfferedAssignmentTransaction(id, workerUserId);
 
   eventBus.emit("ON_ASSIGNMENT_ACCEPTED", {

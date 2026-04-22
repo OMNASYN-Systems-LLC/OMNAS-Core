@@ -1,6 +1,11 @@
 import { eventBus, EVENTS } from "./eventBus.js";
 import { handleAssignmentAccepted } from "./handlers/calendar.handler.js";
 import { handleGhostDetected } from "./handlers/ghost.handler.js";
+import {
+  handleCompanyActivated,
+  handleCompanySuspended,
+  handleCredentialExpired
+} from "./handlers/compliance.handler.js";
 
 export function registerHandlers() {
   // ON_ASSIGNMENT_ACCEPTED → create calendar shift block
@@ -21,6 +26,22 @@ export function registerHandlers() {
     } catch (err) {
       console.error("[Orchestrator] ghost handler error:", err.message);
     }
+  });
+
+  // Phase B — company governance events
+  eventBus.on(EVENTS.ON_COMPANY_ACTIVATED, async (payload) => {
+    console.log("[Orchestrator] ON_COMPANY_ACTIVATED", payload);
+    await handleCompanyActivated(payload);
+  });
+
+  eventBus.on(EVENTS.ON_COMPANY_SUSPENDED, async (payload) => {
+    console.log("[Orchestrator] ON_COMPANY_SUSPENDED", payload);
+    await handleCompanySuspended(payload);
+  });
+
+  eventBus.on(EVENTS.ON_CREDENTIAL_EXPIRED, async (payload) => {
+    console.log("[Orchestrator] ON_CREDENTIAL_EXPIRED", payload);
+    await handleCredentialExpired(payload);
   });
 
   // Reserved for future packs
