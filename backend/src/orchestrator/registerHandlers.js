@@ -1,21 +1,34 @@
-import eventBus from "../infrastructure/events/eventBus.js";
+import { eventBus, EVENTS } from "./eventBus.js";
+import { handleAssignmentAccepted } from "./handlers/calendar.handler.js";
+import { handleGhostDetected } from "./handlers/ghost.handler.js";
 
 export function registerHandlers() {
-  // Placeholder handlers — no business logic yet
-
-  eventBus.on("ON_ASSIGNMENT_ACCEPTED", (payload) => {
-    console.log("[EVENT] ON_ASSIGNMENT_ACCEPTED", payload);
+  // ON_ASSIGNMENT_ACCEPTED → create calendar shift block
+  eventBus.on(EVENTS.ON_ASSIGNMENT_ACCEPTED, async (payload) => {
+    console.log("[Orchestrator] ON_ASSIGNMENT_ACCEPTED", {
+      assignmentId: payload.assignmentId,
+      jobId: payload.jobId,
+      workerUserId: payload.workerUserId,
+    });
+    await handleAssignmentAccepted(payload);
   });
 
-  eventBus.on("ON_GHOST_DETECTED", (payload) => {
-    console.log("[EVENT] ON_GHOST_DETECTED", payload);
+  // ON_GHOST_DETECTED → emergency replacement sequence
+  eventBus.on(EVENTS.ON_GHOST_DETECTED, async (payload) => {
+    console.log("[Orchestrator] ON_GHOST_DETECTED:", JSON.stringify(payload));
+    try {
+      await handleGhostDetected(payload);
+    } catch (err) {
+      console.error("[Orchestrator] ghost handler error:", err.message);
+    }
   });
 
-  eventBus.on("ON_MEETING_UPLOADED", (payload) => {
-    console.log("[EVENT] ON_MEETING_UPLOADED", payload);
+  // Reserved for future packs
+  eventBus.on(EVENTS.ON_MEETING_UPLOADED, (payload) => {
+    console.log("[Orchestrator] ON_MEETING_UPLOADED", payload);
   });
 
-  eventBus.on("ON_AUDIT_VERIFIED", (payload) => {
-    console.log("[EVENT] ON_AUDIT_VERIFIED", payload);
+  eventBus.on(EVENTS.ON_AUDIT_VERIFIED, (payload) => {
+    console.log("[Orchestrator] ON_AUDIT_VERIFIED", payload);
   });
 }

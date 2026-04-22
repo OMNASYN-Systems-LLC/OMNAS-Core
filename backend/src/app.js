@@ -25,8 +25,11 @@ import { analyticsRouter } from "./modules/analytics/analytics.routes.js";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { actionsRouter } from "./modules/actions/actions.routes.js";
 import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
+import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
+import { calendarRouter } from "./modules/calendar/calendar.routes.js";
 
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { registerHandlers } from "./orchestrator/registerHandlers.js";
 
 export const app = express();
 
@@ -55,6 +58,7 @@ app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
 // 🔥 API ROUTES - CORE
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/workers", reliabilityRouter);          // GET /:id/reliability (contractor + worker)
 app.use("/api/workers", workerRouter);
 app.use("/api/contractors", contractorRouter);
 app.use("/api/skills", skillsRouter);
@@ -80,6 +84,12 @@ app.use("/api/escalations", escalationsRouter);      // Safety + issue escalatio
 
 // 🔥 ACTIONS / DIRECTIVES
 app.use("/api/actions", actionsRouter);              // Draft directive system
+
+// 🔥 CALENDAR
+app.use("/api/calendar", calendarRouter);            // Shift blocks + event log
+
+// 🔥 ORCHESTRATOR — event-driven recovery handlers (ghost, assignment, calendar)
+registerHandlers();
 
 // 🔥 ERROR HANDLING
 app.use(notFoundHandler);

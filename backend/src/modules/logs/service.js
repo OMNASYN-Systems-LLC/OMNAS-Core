@@ -6,6 +6,7 @@ import {
   listLogsForAssignment
 } from "./repository.js";
 import { assertNonNegativeInteger, assertRequiredFields } from "../../utils/validation.js";
+import { recomputeReliability } from "../reliability/reliability.service.js";
 
 // 🔥 AUTHORIZATION
 function ensureAssignmentAccess(assignment, authUser) {
@@ -115,7 +116,7 @@ export async function submitDailyLog(assignmentId, workerUserId, payload) {
   }
 
   // 🔥 FULL CONSTRUCTION PAYLOAD
-  return createDailyLog({
+  const log = await createDailyLog({
     // Core
     assignmentId,
     jobId: assignment.job_id,
@@ -145,6 +146,14 @@ export async function submitDailyLog(assignmentId, workerUserId, payload) {
     submittedBy: workerUserId,
     isDraft: payload.isDraft ?? false
   });
+
+  // Fire-and-forget: refresh reliability score after each log submission
+  // so anomaly signals (extreme hours, late submission, issue keywords) are reflected promptly
+  if (!log.is_draft) {
+    recomputeReliability(workerUserId).catch(() => {});
+  }
+
+  return log;
 }
 
 // 🔥 PROGRAMMATIC LOGS (mobile apps + integrations)

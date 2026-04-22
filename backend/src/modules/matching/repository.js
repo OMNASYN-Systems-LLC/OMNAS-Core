@@ -21,7 +21,8 @@ export async function getJobWithRequirements(jobId, contractorUserId) {
 
 export async function listWorkersForMatching() {
   const workerQuery = `
-    SELECT wp.user_id, wp.first_name, wp.last_name, wp.home_zip, wp.trade_primary
+    SELECT wp.user_id, wp.first_name, wp.last_name, wp.home_zip, wp.trade_primary,
+           wp.reliability_score
     FROM worker_profiles wp
   `;
   const workersResponse = await db.query(workerQuery);
