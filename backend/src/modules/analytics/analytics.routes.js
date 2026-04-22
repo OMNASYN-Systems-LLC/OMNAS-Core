@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/authContext.js";
-import { getJobCommandController } from "./analytics.controller.js";
+import {
+  getJobCommandController,
+  getFinancialSnapshotController,
+  getJobActivitySnapshotController,
+} from "./analytics.controller.js";
 
 export const analyticsRouter = Router();
 

@@ -1,5 +1,5 @@
 import { assertNonNegativeInteger } from "../../utils/validation.js";
-import { getComplianceStatus, getTradeFit, normalizeTrade } from "../pca/taxonomy/tradeIntelligence.js";
+import { getComplianceStatus, getTradeFit, normalizeTrade } from "../../shared/pca/taxonomy/tradeIntelligence.js";
 import { getJobForRecommendations, listAssignedWorkerIds, listWorkersForRecommendations } from "./repository.js";
 
 const COMPONENT_WEIGHTS = {

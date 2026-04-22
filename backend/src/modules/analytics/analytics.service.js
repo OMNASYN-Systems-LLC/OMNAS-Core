@@ -1,4 +1,5 @@
 import { assertNonNegativeInteger } from "../../utils/validation.js";
+import { normalizeTrade } from "../../shared/pca/taxonomy/tradeIntelligence.js";
 // 🔥 FULL SERVICE DEPENDENCIES (merged both branches)
 import { 
   getEscalationQueue } from "../escalations/service.js";
@@ -120,7 +121,7 @@ export async function getJobCommand(jobId, authUser) {
 
   // 🔥 COMBINED HEALTH SCORE
   let healthScore = health.score;
-  healthScore -= scheduleDriftDays * 4;
+  healthScore -= drift.driftDays * 4;
   healthScore -= toNumber(financialErosion?.thresholds?.erosionRatio, 0) * 0.7;
   healthScore -= linkedEscalations.filter(item => item.severity === "AMBER").length * 6;
   healthScore = clamp(Math.round(healthScore), 0, 100);
@@ -341,6 +342,3 @@ function computeTradeCoverage(assignments, jobCategories) {
   return jobCategories.map(cat => ({ category: cat.category, coverage: 0.85 }));
 }
 
-function normalizeTrade(trade) {
-  return String(trade || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-}

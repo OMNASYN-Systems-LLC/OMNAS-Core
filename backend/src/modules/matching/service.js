@@ -1,5 +1,5 @@
 // 🔥 FULL IMPORTS (merged both branches)
-import { getComplianceStatus, getTradeFit, normalizeTrade } from "../pca/taxonomy/tradeIntelligence.js";
+import { getComplianceStatus, getTradeFit, normalizeTrade } from "../../shared/pca/taxonomy/tradeIntelligence.js";
 import {
   getJobWithRequirements,
   getRankedMatchScoresFromCache,

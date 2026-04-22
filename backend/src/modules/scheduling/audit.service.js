@@ -1,4 +1,4 @@
-import { normalizeTrade } from "../pca/taxonomy/tradeIntelligence.js";
+import { normalizeTrade } from "../../shared/pca/taxonomy/tradeIntelligence.js";
 
 const TRADE_RATES = {
   sitework: 1.0,
