@@ -28,6 +28,10 @@ import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
 import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
 import { calendarRouter } from "./modules/calendar/calendar.routes.js";
 
+// 🔥 PHASE B — COMPANY GOVERNANCE
+import { complianceRouter } from "./modules/compliance/compliance.routes.js";
+import { triageRouter } from "./modules/triage/triage.routes.js";
+
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { registerHandlers } from "./orchestrator/registerHandlers.js";
 
@@ -88,7 +92,11 @@ app.use("/api/actions", actionsRouter);              // Draft directive system
 // 🔥 CALENDAR
 app.use("/api/calendar", calendarRouter);            // Shift blocks + event log
 
-// 🔥 ORCHESTRATOR — event-driven recovery handlers (ghost, assignment, calendar)
+// 🔥 PHASE B — COMPANY GOVERNANCE + TRIAGE
+app.use("/api/compliance", complianceRouter);        // Company compliance state management
+app.use("/api/dashboard", triageRouter);             // Triage: LOCKED_JOBS | COMPLIANCE_ALERTS | GHOST_EVENTS
+
+// 🔥 ORCHESTRATOR — event-driven recovery handlers (ghost, assignment, calendar, compliance)
 registerHandlers();
 
 // 🔥 ERROR HANDLING
