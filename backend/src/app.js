@@ -28,7 +28,8 @@ import { assemblerRouter } from "./modules/assembler/assembler.routes.js";
 import { reliabilityRouter } from "./modules/reliability/reliability.routes.js";
 import { calendarRouter } from "./modules/calendar/calendar.routes.js";
 
-// 🔥 PHASE B — COMPANY GOVERNANCE
+// 🔥 COMPANY GOVERNANCE (Phase B + Reconciliation)
+import { companiesRouter } from "./modules/companies/companies.routes.js";
 import { complianceRouter } from "./modules/compliance/compliance.routes.js";
 import { triageRouter } from "./modules/triage/triage.routes.js";
 
@@ -65,6 +66,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/workers", reliabilityRouter);          // GET /:id/reliability (contractor + worker)
 app.use("/api/workers", workerRouter);
 app.use("/api/contractors", contractorRouter);
+app.use("/api/companies", companiesRouter);          // Company registration + worker affiliation
 app.use("/api/skills", skillsRouter);
 
 // 🔥 JOBS ECOSYSTEM (nested for construction workflows)
