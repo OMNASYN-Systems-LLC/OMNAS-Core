@@ -6,6 +6,7 @@ import {
   getActiveWorkerIdsForJob,
   getJobSlotStatus,
 } from "./assembler.repository.js";
+import { getJobDocGating } from "../jobs/repository.js";
 
 // Score thresholds (raw points on the 0–125 matching scale).
 // TIER_OFFER can be overridden per-call via options.minScoreThreshold (0–1 fraction).
@@ -61,6 +62,19 @@ export async function runAutofill(jobId, contractorUserId, options = {}) {
     throw err;
   }
 
+  // 1b. Document gating pre-flight (checked after ownership to avoid leaking info)
+  const docGating = await getJobDocGating(jobId);
+  const gatingState = docGating?.state;
+  if (gatingState === "LOCKED" || gatingState === "AT_RISK") {
+    const err = new Error(
+      gatingState === "AT_RISK"
+        ? "Autofill blocked: a linked document has been rejected and requires attention"
+        : "Autofill blocked: linked documents are pending review"
+    );
+    err.statusCode = 423;
+    throw err;
+  }
+
   // 2. Expire stale offers — frees slots for re-assignment
   const timedOut = await expireTimedOutOffers(jobId, timeoutMinutes);
 
@@ -82,6 +96,8 @@ export async function runAutofill(jobId, contractorUserId, options = {}) {
       payMultiplier:     options.payMultiplier    ?? 1,
       effectiveTierOffer,
     }),
+    // LOCKED_PARTIAL: dispatch is allowed but callers should surface the advisory.
+    ...(gatingState === "LOCKED_PARTIAL" && { docGating }),
   };
 
   // Fully staffed — nothing to do

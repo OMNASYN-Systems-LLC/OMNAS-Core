@@ -4,7 +4,7 @@ export async function getDashboardJob(jobId) {
   const { rows } = await db.query(
     `SELECT
        j.id, j.posted_by, j.title, j.status,
-       j.starts_at, j.ends_at, j.pay_rate,
+       j.starts_at, j.ends_at, j.pay_rate, j.metadata,
        (SELECT COUNT(*)::INT FROM job_required_skills WHERE job_id = j.id) AS required_slots
      FROM jobs j
      WHERE j.id = $1`,

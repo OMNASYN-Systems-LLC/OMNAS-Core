@@ -237,7 +237,8 @@ export async function getJobSchedule(jobId, contractorUserId) {
     lookahead,
     tradeCoverage,
     audit,
-    lookaheadAdjustment
+    lookaheadAdjustment,
+    docGating: context.job.metadata?.doc_gating ?? null,
   };
 }
 

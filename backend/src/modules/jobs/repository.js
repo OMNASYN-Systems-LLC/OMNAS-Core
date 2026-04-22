@@ -137,6 +137,36 @@ export async function deleteJob(jobId, postedBy) {
   return rowCount > 0;
 }
 
+// ─── Document gating helpers ─────────────────────────────────────────────────
+
+// Merges document gating state into jobs.metadata.doc_gating without
+// disturbing any other keys already present in the metadata document.
+export async function patchJobDocGating(jobId, patch) {
+  await db.query(
+    `UPDATE jobs
+     SET metadata   = jsonb_set(
+           metadata,
+           '{doc_gating}',
+           COALESCE(metadata->'doc_gating', '{}'::jsonb) || $2::jsonb
+         ),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [jobId, JSON.stringify(patch)]
+  );
+}
+
+// Reads the current doc_gating advisory block from jobs.metadata.
+// Returns null when no gating evaluation has been persisted yet.
+export async function getJobDocGating(jobId) {
+  const { rows } = await db.query(
+    `SELECT metadata->'doc_gating' AS doc_gating FROM jobs WHERE id = $1`,
+    [jobId]
+  );
+  return rows[0]?.doc_gating ?? null;
+}
+
+// ─── Ghost recovery helpers ───────────────────────────────────────────────────
+
 // Returns true when the job is already locked into a ghost-replacement cycle.
 export async function isJobReplacing(jobId) {
   const { rows } = await db.query(

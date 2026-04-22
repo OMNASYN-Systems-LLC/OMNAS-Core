@@ -62,6 +62,7 @@ export async function getJobDashboard(jobId, authUser) {
     throw err;
   }
 
+  const docGating = job.metadata?.doc_gating ?? null;
   const now = new Date();
   const payRate = toNum(job.pay_rate);
   const requiredSlots = toNum(job.required_slots);
@@ -204,6 +205,24 @@ export async function getJobDashboard(jobId, authUser) {
     });
   }
 
+  if (docGating?.state === "AT_RISK") {
+    action.push({
+      id: "doc-at-risk",
+      priority: "critical",
+      label: "Rejected document requires attention before dispatch can proceed",
+      cta: "Review documents",
+      route: `/api/docs/project/${job.id}`,
+    });
+  } else if (docGating?.state === "LOCKED") {
+    action.push({
+      id: "doc-locked",
+      priority: "high",
+      label: "Pending documents require review before dispatch can proceed",
+      cta: "Review documents",
+      route: `/api/docs/project/${job.id}`,
+    });
+  }
+
   if (action.length === 0) {
     action.push({
       id: "all-clear",
@@ -238,6 +257,7 @@ export async function getJobDashboard(jobId, authUser) {
       endsAt: job.ends_at,
       payRate: payRate > 0 ? payRate : null,
       requiredSlots: requiredSlots > 0 ? requiredSlots : null,
+      docGating,
     },
     hero: {
       profitLoss: profitLoss > 0 ? profitLoss : null,

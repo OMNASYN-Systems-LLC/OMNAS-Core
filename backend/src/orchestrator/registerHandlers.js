@@ -1,6 +1,11 @@
 import { eventBus, EVENTS } from "./eventBus.js";
 import { handleAssignmentAccepted } from "./handlers/calendar.handler.js";
 import { handleGhostDetected } from "./handlers/ghost.handler.js";
+import {
+  handleDocApproved,
+  handleDocPartiallyApproved,
+  handleDocRejected,
+} from "./handlers/document.handler.js";
 
 export function registerHandlers() {
   // ON_ASSIGNMENT_ACCEPTED → create calendar shift block
@@ -21,6 +26,22 @@ export function registerHandlers() {
     } catch (err) {
       console.error("[Orchestrator] ghost handler error:", err.message);
     }
+  });
+
+  // Document review outcome → re-evaluate job doc-gating state
+  eventBus.on(EVENTS.ON_DOC_APPROVED, async (payload) => {
+    console.log("[Orchestrator] ON_DOC_APPROVED", { docId: payload.docId, jobId: payload.jobId });
+    await handleDocApproved(payload);
+  });
+
+  eventBus.on(EVENTS.ON_DOC_PARTIALLY_APPROVED, async (payload) => {
+    console.log("[Orchestrator] ON_DOC_PARTIALLY_APPROVED", { docId: payload.docId, jobId: payload.jobId });
+    await handleDocPartiallyApproved(payload);
+  });
+
+  eventBus.on(EVENTS.ON_DOC_REJECTED, async (payload) => {
+    console.log("[Orchestrator] ON_DOC_REJECTED", { docId: payload.docId, jobId: payload.jobId });
+    await handleDocRejected(payload);
   });
 
   // Reserved for future packs
