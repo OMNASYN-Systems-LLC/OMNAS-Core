@@ -228,7 +228,7 @@ function computeReadiness(job, assignments) {
 
   const accepted = assignments.filter(a => ["accepted", "active", "completed"].includes(a.status)).length;
   const readinessPercent = Math.min(100, Math.round((accepted / requiredSlots) * 100));
-  return { readinessPercent, acceptedCount, requiredSlots, openSlots: Math.max(0, requiredSlots - accepted) };
+  return { readinessPercent, acceptedCount: accepted, requiredSlots, openSlots: Math.max(0, requiredSlots - accepted) };
 }
 
 function computeRisks(assignments, logs) {
@@ -340,5 +340,48 @@ function getJobCategories(job) {
 function computeTradeCoverage(assignments, jobCategories) {
   // Implementation for trade matching (stubbed for brevity)
   return jobCategories.map(cat => ({ category: cat.category, coverage: 0.85 }));
+}
+
+function computeAutomation(assignments) {
+  const offered = assignments.filter(a => a.status === "offered").length;
+  const active  = assignments.filter(a => a.status === "active").length;
+  return { offeredCount: offered, activeCount: active };
+}
+
+function computeMissingWork(job, assignments, logs, now) {
+  const activeWorkers = assignments.filter(a => a.status === "active").length;
+  const todayLogs = logs.filter(l => {
+    const d = new Date(l.log_date);
+    return d.toDateString() === now.toDateString();
+  }).length;
+  return { missingLogs: Math.max(0, activeWorkers - todayLogs) };
+}
+
+function computeForecast(financial, drift, readiness) {
+  const risk = (drift.pastDue || readiness.openSlots > 0) ? "elevated" : "low";
+  return { completionRisk: risk };
+}
+
+function computeHealth(readiness, drift, risks, financial) {
+  let score = 100;
+  score -= (readiness.openSlots || 0) * 5;
+  score -= (drift.driftDays || 0) * 4;
+  score -= (risks.hardLocks || 0) * 3;
+  return { score: Math.max(0, Math.min(100, Math.round(score))) };
+}
+
+function computeVerifiedWork(job, logs) {
+  const verifiedHours = logs.reduce((sum, l) => sum + Number(l.hours_worked || 0), 0);
+  const payRate = Number(job.pay_rate || 0);
+  return {
+    verifiedHours: round(verifiedHours, 1),
+    verifiedWorkValue: round(verifiedHours * payRate, 2)
+  };
+}
+
+function scheduleStatusLabel(drift) {
+  if (drift.phase === "pre-start") return "not_started";
+  if (drift.pastDue) return "delayed";
+  return "on_track";
 }
 
