@@ -4,6 +4,6 @@ import { listEscalationsController, resolveEscalationController } from "./contro
 
 export const escalationsRouter = Router();
 
-escalationsRouter.use(requireAuth, requireRole("contractor"));
+escalationsRouter.use(requireAuth, requireRole("contractor", "superintendent"));
 escalationsRouter.get("/", listEscalationsController);
 escalationsRouter.post("/:id/decision", resolveEscalationController);

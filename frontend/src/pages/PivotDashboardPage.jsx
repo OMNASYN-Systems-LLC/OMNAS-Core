@@ -17,6 +17,8 @@ export function PivotDashboardPage() {
 
   useEffect(() => {
     refresh();
+    const timer = setInterval(refresh, 30_000);
+    return () => clearInterval(timer);
   }, []);
 
   const sections = useMemo(() => {
