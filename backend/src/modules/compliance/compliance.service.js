@@ -7,7 +7,10 @@ import {
   getComplianceHistory,
   getCompanyWorkerIds,
   getAllCompaniesWithStatus,
-  getCompanyById
+  getCompanyById,
+  findActiveOverride,
+  createOverride,
+  listActiveOverrides
 } from "./compliance.repository.js";
 import eventBus from "../../infrastructure/events/eventBus.js";
 import { EVENTS } from "../../orchestrator/eventBus.js";
@@ -25,7 +28,7 @@ const VALID_STATUSES = ["PENDING", "ACTIVE", "SUSPENDED"];
 // --- Assignment acceptance guard ---
 
 // Throws 403 when the worker's affiliated company is not ACTIVE.
-// Returns null when the worker is unaffiliated (solo worker — no governance applies).
+// Returns null when the worker is unaffiliated (solo worker) or an active override exists.
 // Every block is persisted to audit_block_log before throwing.
 export async function checkAcceptanceEligibility(workerUserId, assignmentId) {
   const affiliation = await getWorkerCompanyCompliance(workerUserId);
@@ -38,6 +41,12 @@ export async function checkAcceptanceEligibility(workerUserId, assignmentId) {
 
   if (status === "ACTIVE") {
     return null; // clear
+  }
+
+  // Active override bypasses the block without touching the audit log.
+  const override = await findActiveOverride(workerUserId, "ASSIGNMENT_ACCEPT");
+  if (override) {
+    return null; // waiver in effect
   }
 
   const isSuspended = status === "SUSPENDED";
@@ -74,50 +83,58 @@ export async function checkCheckinEligibility(workerUserId, assignmentId) {
   const affiliation = await getWorkerCompanyCompliance(workerUserId);
 
   if (affiliation && affiliation.compliance_status === "SUSPENDED") {
-    const reasonDetail = [
-      `Check-in blocked: company '${affiliation.company_name}' is suspended.`,
-      affiliation.reason ? `Reason: ${affiliation.reason}.` : "",
-      "Workers cannot submit field logs while their company is suspended."
-    ].filter(Boolean).join(" ");
+    // Active CHECKIN override bypasses the company-suspended block.
+    const override = await findActiveOverride(workerUserId, "CHECKIN");
+    if (!override) {
+      const reasonDetail = [
+        `Check-in blocked: company '${affiliation.company_name}' is suspended.`,
+        affiliation.reason ? `Reason: ${affiliation.reason}.` : "",
+        "Workers cannot submit field logs while their company is suspended."
+      ].filter(Boolean).join(" ");
 
-    await logBlockEvent({
-      blockType:     "CHECKIN",
-      reasonCode:    BLOCK_REASON.COMPANY_SUSPENDED,
-      reasonDetail,
-      entityType:    "daily_log",
-      entityId:      null,
-      workerUserId,
-      companyId:     affiliation.company_id,
-      context:       { assignmentId, complianceStatus: "SUSPENDED" }
-    });
+      await logBlockEvent({
+        blockType:     "CHECKIN",
+        reasonCode:    BLOCK_REASON.COMPANY_SUSPENDED,
+        reasonDetail,
+        entityType:    "daily_log",
+        entityId:      null,
+        workerUserId,
+        companyId:     affiliation.company_id,
+        context:       { assignmentId, complianceStatus: "SUSPENDED" }
+      });
 
-    const err = new Error(reasonDetail);
-    err.statusCode = 403;
-    err.reasonCode  = BLOCK_REASON.COMPANY_SUSPENDED;
-    throw err;
+      const err = new Error(reasonDetail);
+      err.statusCode = 403;
+      err.reasonCode  = BLOCK_REASON.COMPANY_SUSPENDED;
+      throw err;
+    }
   }
 
   const expired = await getExpiredCredentials(workerUserId);
 
   if (expired.length > 0) {
-    const types       = expired.map((c) => c.credential_type).join(", ");
-    const reasonDetail = `Check-in blocked: expired credentials must be renewed before the next shift. Affected: ${types}.`;
+    // Active CHECKIN override bypasses credential expiry block.
+    const override = await findActiveOverride(workerUserId, "CHECKIN");
+    if (!override) {
+      const types       = expired.map((c) => c.credential_type).join(", ");
+      const reasonDetail = `Check-in blocked: expired credentials must be renewed before the next shift. Affected: ${types}.`;
 
-    await logBlockEvent({
-      blockType:     "CHECKIN",
-      reasonCode:    BLOCK_REASON.CREDENTIAL_EXPIRED,
-      reasonDetail,
-      entityType:    "daily_log",
-      entityId:      null,
-      workerUserId,
-      companyId:     affiliation?.company_id ?? null,
-      context:       { assignmentId, expiredCredentials: expired }
-    });
+      await logBlockEvent({
+        blockType:     "CHECKIN",
+        reasonCode:    BLOCK_REASON.CREDENTIAL_EXPIRED,
+        reasonDetail,
+        entityType:    "daily_log",
+        entityId:      null,
+        workerUserId,
+        companyId:     affiliation?.company_id ?? null,
+        context:       { assignmentId, expiredCredentials: expired }
+      });
 
-    const err = new Error(reasonDetail);
-    err.statusCode = 403;
-    err.reasonCode  = BLOCK_REASON.CREDENTIAL_EXPIRED;
-    throw err;
+      const err = new Error(reasonDetail);
+      err.statusCode = 403;
+      err.reasonCode  = BLOCK_REASON.CREDENTIAL_EXPIRED;
+      throw err;
+    }
   }
 
   return null; // clear
@@ -172,4 +189,49 @@ export async function listAllCompanies() {
 
 export async function getCompanyWorkers(companyId) {
   return getCompanyWorkerIds(companyId);
+}
+
+// --- Compliance override management ---
+
+const VALID_OVERRIDE_TYPES = ["ASSIGNMENT_ACCEPT", "CHECKIN"];
+
+export async function createComplianceOverride(authorizedBy, payload) {
+  const { overrideType, reasonCode, reasonText, workerUserId, companyId, entityType, entityId, expiresAt } = payload ?? {};
+
+  if (!VALID_OVERRIDE_TYPES.includes(overrideType)) {
+    const err = new Error(`overrideType must be one of: ${VALID_OVERRIDE_TYPES.join(", ")}`);
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!reasonCode) {
+    const err = new Error("reasonCode is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!workerUserId && !companyId) {
+    const err = new Error("At least one of workerUserId or companyId is required");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!expiresAt || isNaN(Date.parse(expiresAt))) {
+    const err = new Error("expiresAt is required and must be a valid ISO timestamp");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  return createOverride({
+    overrideType,
+    reasonCode,
+    reasonText:   reasonText   ?? null,
+    workerUserId: workerUserId ?? null,
+    companyId:    companyId   ?? null,
+    entityType:   entityType  ?? null,
+    entityId:     entityId    ?? null,
+    authorizedBy,
+    expiresAt
+  });
+}
+
+export async function listComplianceOverrides(filters = {}) {
+  return listActiveOverrides(filters);
 }

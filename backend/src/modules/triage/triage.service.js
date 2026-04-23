@@ -6,14 +6,23 @@ import {
   getBlockLogForEntity
 } from "./triage.repository.js";
 
+async function safeQuery(label, fn, fallback) {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(`[Triage] bucket '${label}' failed:`, err.message);
+    return fallback;
+  }
+}
+
 // Aggregates the three operational triage buckets for the GC / Prime view.
-// Data is collected in parallel; failure in one bucket degrades gracefully.
+// Each bucket degrades independently — a DB error in one does not fail the response.
 export async function getTriageSummary() {
   const [lockedJobs, nonActiveCompanies, workersWithExpired, ghostData] = await Promise.all([
-    getLockedJobs(),
-    getNonActiveCompanies(),
-    getWorkersWithExpiredCredentials(),
-    getGhostEvents()
+    safeQuery("lockedJobs",        getLockedJobs,                    []),
+    safeQuery("nonActiveCompanies",getNonActiveCompanies,            []),
+    safeQuery("workersWithExpired",getWorkersWithExpiredCredentials, []),
+    safeQuery("ghostEvents",       getGhostEvents,                  { ghosted: [], escalations: [] })
   ]);
 
   const complianceAlerts = [

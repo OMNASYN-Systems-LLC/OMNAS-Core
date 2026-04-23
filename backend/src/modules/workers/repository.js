@@ -78,3 +78,46 @@ export async function getWorkerSkills(userId) {
   const { rows } = await db.query(query, [userId]);
   return rows;
 }
+
+// --- Worker credentials ---
+
+export async function listWorkerCredentials(userId) {
+  const { rows } = await db.query(
+    `SELECT id, credential_type, credential_id, issued_at, expires_at, verified,
+            (expires_at IS NOT NULL AND expires_at < CURRENT_DATE)                        AS is_expired,
+            (expires_at IS NOT NULL AND expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days') AS expires_soon
+     FROM worker_credentials
+     WHERE worker_user_id = $1
+     ORDER BY expires_at ASC NULLS LAST`,
+    [userId]
+  );
+  return rows;
+}
+
+export async function insertCredential(userId, payload) {
+  const { rows } = await db.query(
+    `INSERT INTO worker_credentials
+       (worker_user_id, credential_type, credential_id, issued_at, expires_at, verified)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [
+      userId,
+      payload.credentialType,
+      payload.credentialId   ?? null,
+      payload.issuedAt       ?? null,
+      payload.expiresAt      ?? null,
+      payload.verified       ?? false
+    ]
+  );
+  return rows[0];
+}
+
+export async function deleteCredential(id, userId) {
+  const { rows } = await db.query(
+    `DELETE FROM worker_credentials
+     WHERE id = $1 AND worker_user_id = $2
+     RETURNING *`,
+    [id, userId]
+  );
+  return rows[0] ?? null;
+}

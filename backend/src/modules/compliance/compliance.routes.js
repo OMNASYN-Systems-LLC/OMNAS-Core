@@ -4,7 +4,9 @@ import {
   listAllCompanies,
   getCompanyComplianceStatus,
   setCompanyStatus,
-  getHistory
+  getHistory,
+  createComplianceOverride,
+  listComplianceOverrides
 } from "./compliance.service.js";
 
 export const complianceRouter = Router();
@@ -71,3 +73,35 @@ complianceRouter.patch(
     }
   }
 );
+
+// POST /api/compliance/overrides
+// Grant a compliance override (waiver) for a worker or company.
+// Restricted to contractors and superintendents.
+// Body: { overrideType, reasonCode, reasonText?, workerUserId?, companyId?, entityType?, entityId?, expiresAt }
+complianceRouter.post(
+  "/overrides",
+  requireRole("contractor", "superintendent"),
+  async (req, res, next) => {
+    try {
+      const override = await createComplianceOverride(req.auth.userId, req.body ?? {});
+      res.status(201).json({ success: true, data: override });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// GET /api/compliance/overrides
+// List active overrides. Optional query params: workerUserId, companyId.
+complianceRouter.get("/overrides", async (req, res, next) => {
+  try {
+    const { workerUserId, companyId } = req.query;
+    const data = await listComplianceOverrides({
+      workerUserId: workerUserId ?? undefined,
+      companyId:    companyId   ?? undefined
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});

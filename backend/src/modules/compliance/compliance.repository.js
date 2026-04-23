@@ -161,3 +161,69 @@ export async function getCompanyById(companyId) {
   );
   return rows[0] ?? null;
 }
+
+// --- Compliance overrides ---
+
+// Returns the first active, non-expired override for a worker + override type, or null.
+export async function findActiveOverride(workerUserId, overrideType) {
+  const { rows } = await db.query(
+    `SELECT * FROM compliance_overrides
+     WHERE worker_user_id = $1
+       AND override_type  = $2
+       AND status         = 'active'
+       AND expires_at     > NOW()
+     ORDER BY authorized_at DESC
+     LIMIT 1`,
+    [workerUserId, overrideType]
+  );
+  return rows[0] ?? null;
+}
+
+export async function createOverride(payload) {
+  const { rows } = await db.query(
+    `INSERT INTO compliance_overrides
+       (override_type, reason_code, reason_text, worker_user_id, company_id,
+        entity_type, entity_id, authorized_by, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *`,
+    [
+      payload.overrideType,
+      payload.reasonCode,
+      payload.reasonText   ?? null,
+      payload.workerUserId ?? null,
+      payload.companyId    ?? null,
+      payload.entityType   ?? null,
+      payload.entityId     ?? null,
+      payload.authorizedBy,
+      payload.expiresAt
+    ]
+  );
+  return rows[0];
+}
+
+export async function listActiveOverrides({ workerUserId, companyId } = {}) {
+  const conditions = ["o.status = 'active'", "o.expires_at > NOW()"];
+  const params = [];
+
+  if (workerUserId) {
+    params.push(workerUserId);
+    conditions.push(`o.worker_user_id = $${params.length}`);
+  }
+  if (companyId) {
+    params.push(companyId);
+    conditions.push(`o.company_id = $${params.length}`);
+  }
+
+  const where = conditions.join(" AND ");
+  const { rows } = await db.query(
+    `SELECT o.*,
+            wp.first_name AS authorized_by_first,
+            wp.last_name  AS authorized_by_last
+     FROM compliance_overrides o
+     LEFT JOIN worker_profiles wp ON wp.user_id = o.authorized_by
+     WHERE ${where}
+     ORDER BY o.authorized_at DESC`,
+    params
+  );
+  return rows;
+}

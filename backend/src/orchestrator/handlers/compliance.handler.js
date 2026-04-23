@@ -52,23 +52,27 @@ export async function handleCompanySuspended({ companyId, reason, changedBy }) {
     );
 
     for (const row of affected) {
+      // Build the reason string once so the fingerprint check and the stored
+      // reason are identical — previously they differed, breaking idempotency.
+      const escReason = `Company suspended — assignment ${row.assignment_id} locked for worker ${row.worker_user_id}.${reason ? ` ${reason}` : ""}`;
+
       // Idempotent: skip if this exact escalation already exists
       const existing = await findPendingByFingerprint(
         companyId,
         "compliance",
-        `Company suspended — assignment ${row.assignment_id} locked`,
+        escReason,
         "COMPANY_SUSPENDED"
       );
 
       if (!existing) {
         await insertEscalation({
-          taskId:         companyId,
-          zone:           "compliance",
-          reason:         `Company suspended — assignment ${row.assignment_id} locked for worker ${row.worker_user_id}. ${reason ?? ""}`.trim(),
-          ruleTriggered:  "COMPANY_SUSPENDED",
-          severity:       "high",
+          taskId:          companyId,
+          zone:            "compliance",
+          reason:          escReason,
+          ruleTriggered:   "COMPANY_SUSPENDED",
+          severity:        "HIGH",
           suggestedAction: "Review and reassign affected workers or restore company compliance before accepting new assignments.",
-          status:         "pending"
+          status:          "pending"
         });
       }
 

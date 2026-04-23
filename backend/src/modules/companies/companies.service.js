@@ -27,11 +27,15 @@ export async function createCompany(ownerUserId, payload) {
     throw err;
   }
 
-  return insertCompany({
+  const company = await insertCompany({
     name,
     licenseNumber: payload?.licenseNumber ?? null,
     ownerUserId
   });
+
+  // Return the enriched record (compliance_status = 'PENDING' already seeded)
+  // so the caller sees the full object without a second GET.
+  return findCompanyById(company.id);
 }
 
 export async function getCompany(companyId) {
