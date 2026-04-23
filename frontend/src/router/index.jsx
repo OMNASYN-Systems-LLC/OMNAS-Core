@@ -3,12 +3,12 @@ import { AuthLayout } from "../components/AuthLayout.jsx";
 import { ContractorDashboardPage } from "../pages/ContractorDashboardPage.jsx";
 import { ContractorProfilePage } from "../pages/ContractorProfilePage.jsx";
 import { LoginPage } from "../pages/LoginPage.jsx";
-// 🔥 ALL PAGES (merged both branches - alphabetical order)
 import { JobDetailPage } from "../pages/JobDetailPage.jsx";
 import { MatchesPage } from "../pages/MatchesPage.jsx";
 import { OpportunitiesPage } from "../pages/OpportunitiesPage.jsx";
 import { PivotDashboardPage } from "../pages/PivotDashboardPage.jsx";
 import { RegisterPage } from "../pages/RegisterPage.jsx";
+import { TriageDashboardPage } from "../pages/TriageDashboardPage.jsx";
 import { WorkerDashboardPage } from "../pages/WorkerDashboardPage.jsx";
 import { WorkerProfilePage } from "../pages/WorkerProfilePage.jsx";
 
@@ -69,7 +69,13 @@ export const router = createBrowserRouter([
         element: <JobDetailPage />
       },
 
-      // 🔥 CONSTRUCTION ANALYTICS (merged codex feature!)
+      // Pilot operations triage (locked jobs, compliance alerts, ghost events)
+      {
+        path: "dashboard/triage",
+        element: <TriageDashboardPage />
+      },
+
+      // Escalation decision queue (superintendent amber/red/green layer)
       {
         path: "dashboard/pivot",
         element: <PivotDashboardPage />

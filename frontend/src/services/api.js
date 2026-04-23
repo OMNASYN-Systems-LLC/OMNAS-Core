@@ -1,11 +1,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 function buildHeaders(auth) {
-  return {
+  const headers = {
     "Content-Type": "application/json",
     "x-user-id": auth.userId,
     "x-user-role": auth.role
   };
+  if (auth.companyId) headers["x-company-id"] = auth.companyId;
+  return headers;
 }
 
 async function request(path, { method = "GET", payload, auth }) {
@@ -190,4 +192,56 @@ export function listEscalations(auth, status = "pending") {
 
 export function decideEscalation(id, payload, auth) {
   return request(`/escalations/${id}/decision`, { method: "POST", payload, auth });
+}
+
+// TRIAGE
+export function getTriageSummary(auth) {
+  return request("/dashboard/triage", { auth });
+}
+
+export function getBlockLog(entityType, entityId, auth) {
+  return request(`/dashboard/triage/blocks/${entityType}/${entityId}`, { auth });
+}
+
+// COMPLIANCE OVERRIDES
+export function createComplianceOverride(payload, auth) {
+  return request("/compliance/overrides", { method: "POST", payload, auth });
+}
+
+export function listComplianceOverrides(params = {}, auth) {
+  const qs = Object.entries(params)
+    .filter(([, v]) => v != null)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  return request(`/compliance/overrides${qs ? `?${qs}` : ""}`, { auth });
+}
+
+// WORKER CREDENTIALS
+export function listWorkerCredentials(auth) {
+  return request("/workers/credentials", { auth });
+}
+
+export function addWorkerCredential(payload, auth) {
+  return request("/workers/credentials", { method: "POST", payload, auth });
+}
+
+export function deleteWorkerCredential(id, auth) {
+  return request(`/workers/credentials/${id}`, { method: "DELETE", auth });
+}
+
+// COMPANIES
+export function createCompany(payload, auth) {
+  return request("/companies", { method: "POST", payload, auth });
+}
+
+export function getMyCompany(auth) {
+  return request("/companies/me", { auth });
+}
+
+export function affiliateWorker(companyId, payload, auth) {
+  return request(`/companies/${companyId}/workers`, { method: "POST", payload, auth });
+}
+
+export function setCompanyComplianceStatus(companyId, payload, auth) {
+  return request(`/compliance/companies/${companyId}/status`, { method: "PATCH", payload, auth });
 }

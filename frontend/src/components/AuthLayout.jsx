@@ -1,32 +1,39 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
+import { getStoredAuth, clearAuth } from "../hooks/useAuth.js";
+
+// Nav items declared with the roles that can see them.
+// "all" means visible even when not logged in (auth pages).
+const NAV_ITEMS = [
+  { to: "/login",               label: "Login",            roles: ["all"] },
+  { to: "/register",            label: "Register",         roles: ["all"] },
+
+  // Worker
+  { to: "/worker-profile",      label: "My Profile",       roles: ["worker"] },
+  { to: "/worker-dashboard",    label: "My Jobs",          roles: ["worker"] },
+
+  // Contractor
+  { to: "/contractor-profile",  label: "Company Profile",  roles: ["contractor"] },
+  { to: "/contractor-dashboard",label: "Dashboard",        roles: ["contractor"] },
+  { to: "/opportunities",       label: "Opportunities",    roles: ["contractor"] },
+
+  // Operations triage — contractor + superintendent + client (read-only)
+  { to: "/dashboard/triage",    label: "Operations Triage", roles: ["contractor", "superintendent", "client"] },
+
+  // Escalation queue (superintendent override layer)
+  { to: "/dashboard/pivot",     label: "Escalation Queue", roles: ["contractor", "superintendent"] },
+
+  // Job intelligence
+  { to: "/jobs/1",              label: "Jobs",             roles: ["contractor", "superintendent", "client"] }
+];
 
 export function AuthLayout() {
-  const location = useLocation();
-  
-  // 🔥 RESPONSIVE NAV SECTIONS
-  const navItems = [
-    // Auth
-    { to: "/login", label: "🔐 Login", roles: ["all"] },
-    { to: "/register", label: "📝 Register", roles: ["all"] },
-    
-    // Worker Flow
-    { to: "/worker-profile", label: "👷 Worker Profile", roles: ["worker"] },
-    { to: "/worker-dashboard", label: "📱 Worker Dashboard", roles: ["worker"] },
-    
-    // Contractor Flow  
-    { to: "/contractor-profile", label: "🏢 Contractor Profile", roles: ["contractor"] },
-    { to: "/contractor-dashboard", label: "💼 Contractor Dashboard", roles: ["contractor"] },
-    
-    // 🔥 CONSTRUCTION ANALYTICS (merged both branches!)
-    { to: "/dashboard/pivot", label: "📊 Daily Pivot", roles: ["contractor", "superintendent"] },
-    
-    // Business Development
-    { to: "/opportunities", label: "🎯 Opportunities", roles: ["contractor"] },
-    
-    // Quick Actions
-    { to: "/job-matches/1", label: "👥 Matches", roles: ["contractor"] },
-    { to: "/jobs/1", label: "📋 Jobs", roles: ["contractor"] }
-  ];
+  const location  = useLocation();
+  const auth      = getStoredAuth();
+  const role      = auth?.role ?? null;
+
+  const visibleItems = NAV_ITEMS.filter(({ roles }) =>
+    roles.includes("all") || (role && roles.includes(role))
+  );
 
   const getNavStyle = (to) => ({
     padding: "0.75rem 1.25rem",
@@ -69,15 +76,8 @@ export function AuthLayout() {
           🏗️ <span style={{ marginLeft: "0.5rem" }}>OMNAS Construction Platform</span>
         </div>
 
-        {/* 🔥 RESPONSIVE NAV */}
-        <nav style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "0.5rem",
-          alignItems: "center",
-          justifyContent: "center"
-        }}>
-          {navItems.map(({ to, label, roles }) => (
+          <nav style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center", justifyContent: "center" }}>
+          {visibleItems.map(({ to, label }) => (
             <Link
               key={to}
               to={to}
@@ -88,14 +88,23 @@ export function AuthLayout() {
               }}
               onMouseLeave={(e) => {
                 e.target.style.transform = "translateY(0)";
-                e.target.style.boxShadow = location.pathname === to 
-                  ? "0 4px 12px rgba(25,118,210,0.4)" 
+                e.target.style.boxShadow = location.pathname === to
+                  ? "0 4px 12px rgba(25,118,210,0.4)"
                   : "none";
               }}
             >
               {label}
             </Link>
           ))}
+          {auth && (
+            <button
+              type="button"
+              onClick={() => { clearAuth(); window.location.href = "/login"; }}
+              style={{ ...getNavStyle("/___logout___"), background: "rgba(239,68,68,0.1)", color: "#dc2626", borderColor: "rgba(239,68,68,0.3)" }}
+            >
+              Sign Out ({role})
+            </button>
+          )}
         </nav>
       </header>
 
