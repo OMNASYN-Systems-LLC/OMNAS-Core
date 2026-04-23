@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { importOpportunityToJob, listReadyOpportunities } from "../services/api.js";
+import { getAuth } from "../hooks/useAuth.js";
 
 export function OpportunitiesPage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+  const auth = getAuth();
+  if (!auth) return <p>Please <Link to="/login">log in</Link>.</p>;
   const [opportunities, setOpportunities] = useState([]);
   const [message, setMessage] = useState("");
   const navigate = useNavigate();

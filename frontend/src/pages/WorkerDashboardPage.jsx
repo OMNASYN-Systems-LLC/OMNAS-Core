@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   acceptAssignment,
   completeAssignment,
@@ -10,6 +11,7 @@ import {
   submitDailyExecutionLog,
   submitVoiceLog
 } from "../services/api.js";
+import { getAuth } from "../hooks/useAuth.js";
 
 const PENDING_KEY = "omnas_pending_logs_v1";
 
@@ -27,7 +29,7 @@ function savePending(items) {
 }
 
 export function WorkerDashboardPage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000001", role: "worker" };
+  const auth = getAuth();
   const [assignments, setAssignments] = useState([]);
   const [logsByAssignment, setLogsByAssignment] = useState({});
   const [message, setMessage] = useState("");
@@ -66,6 +68,10 @@ export function WorkerDashboardPage() {
   const offered = useMemo(() => assignments.filter(item => item.status === "offered"), [assignments]);
   const active = useMemo(() => assignments.filter(item => ["accepted", "active"].includes(item.status)), [assignments]);
   const completed = useMemo(() => assignments.filter(item => item.status === "completed"), [assignments]);
+
+  if (!auth) {
+    return <p>Please <Link to="/login">log in</Link> to access your dashboard.</p>;
+  }
 
   async function runAction(action, id) {
     try {
