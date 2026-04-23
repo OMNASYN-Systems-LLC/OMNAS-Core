@@ -1,10 +1,4 @@
-# ✅ **COMPLETE WorkerDashboardPage.jsx - COPY/PASTE TO GITHUB**
-
-**Ultimate construction worker dashboard with voice logging + offline sync!**
-
-```javascript
 import { useEffect, useMemo, useState } from "react";
-// 🔥 FULL API FEATURES (merged both branches)
 import {
   acceptAssignment,
   completeAssignment,
@@ -16,13 +10,15 @@ import {
   submitDailyExecutionLog,
   submitVoiceLog
 } from "../services/api.js";
+import { getStoredAuth } from "../hooks/useAuth.js";
+
+// ─── Offline queue ─────────────────────────────────────────────────────────────
 
 const PENDING_KEY = "omnas_pending_logs_v1";
 
 function loadPending() {
   try {
-    const raw = localStorage.getItem(PENDING_KEY);
-    return raw ? JSON.parse(raw) : [];
+    return JSON.parse(localStorage.getItem(PENDING_KEY) ?? "[]");
   } catch {
     return [];
   }
@@ -32,292 +28,260 @@ function savePending(items) {
   localStorage.setItem(PENDING_KEY, JSON.stringify(items));
 }
 
+// ─── Shared micro-styles ───────────────────────────────────────────────────────
+
+const btn = {
+  primary: {
+    padding: "0.75rem 1.5rem",
+    background: "#1976d2",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    fontSize: "0.95rem"
+  },
+  success: {
+    padding: "0.75rem 1.5rem",
+    background: "#28a745",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    fontSize: "0.95rem"
+  },
+  danger: {
+    padding: "0.75rem 1.5rem",
+    background: "#dc3545",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    fontSize: "0.95rem"
+  }
+};
+
+const fieldStyle = {
+  width: "100%",
+  padding: "0.75rem 1rem",
+  borderRadius: "8px",
+  border: "1px solid #dee2e6",
+  fontSize: "0.95rem",
+  boxSizing: "border-box",
+  marginBottom: "0.75rem"
+};
+
+const WORKER_FALLBACK = { userId: "00000000-0000-0000-0000-000000000001", role: "worker" };
+
+// ─── Main component ────────────────────────────────────────────────────────────
+
 export function WorkerDashboardPage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000001", role: "worker" };
-  const [assignments, setAssignments] = useState([]);
-  const [logsByAssignment, setLogsByAssignment] = useState({});
-  // 🔥 FULL STATE (voice + form + offline)
-  const [message, setMessage] = useState("");
-  const [activeDayAssignmentId, setActiveDayAssignmentId] = useState(null);
-  const [draft, setDraft] = useState({ work_completed: "", issues_blockers: "", photos: [""] });
-  const [pendingLogs, setPendingLogs] = useState(loadPending());
-  const [logForms, setLogForms] = useState({});
+  const auth = getStoredAuth() ?? WORKER_FALLBACK;
+
+  const [assignments, setAssignments]             = useState([]);
+  const [logsByAssignment, setLogsByAssignment]   = useState({});
+  const [message, setMessage]                     = useState("");
+  const [messageType, setMessageType]             = useState("info"); // info | success | warn | error
+  const [activeDayId, setActiveDayId]             = useState(null);
+  const [draft, setDraft]                         = useState({ work_completed: "", issues_blockers: "", photos: [""] });
+  const [pendingLogs, setPendingLogs]             = useState(loadPending);
+  const [logForms, setLogForms]                   = useState({});
+
+  // Persist offline queue whenever it changes
+  useEffect(() => { savePending(pendingLogs); }, [pendingLogs]);
+
+  useEffect(() => { refresh(); }, []);
 
   async function refresh() {
     try {
-      const response = await listAssignments(auth);
-      const assignmentRows = response.data;
-      setAssignments(assignmentRows);
+      const res = await listAssignments(auth);
+      const rows = res.data ?? [];
+      setAssignments(rows);
 
-      // 🔥 PARALLEL LOG LOADING
-      const logsEntries = await Promise.all(
-        assignmentRows.map(async (assignment) => {
-          const logsResponse = await getAssignmentLogs(assignment.id, auth);
-          return [assignment.id, logsResponse.data];
+      const entries = await Promise.all(
+        rows.map(async (a) => {
+          try {
+            const lr = await getAssignmentLogs(a.id, auth);
+            return [a.id, lr.data ?? []];
+          } catch {
+            return [a.id, []];
+          }
         })
       );
-
-      setLogsByAssignment(Object.fromEntries(logsEntries));
-    } catch (error) {
-      setMessage(`Refresh failed: ${error.message}`);
+      setLogsByAssignment(Object.fromEntries(entries));
+    } catch (err) {
+      flash(err.message, "error");
     }
   }
 
-  // 🔥 OFFLINE SYNC
-  useEffect(() => {
-    savePending(pendingLogs);
-  }, [pendingLogs]);
+  function flash(text, type = "info") {
+    setMessage(text);
+    setMessageType(type);
+  }
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  // ─── Assignment actions ──────────────────────────────────────────────────────
 
-  // 🔥 ASSIGNMENT FILTERS
-  const offered = useMemo(() => assignments.filter(item => item.status === "offered"), [assignments]);
-  const active = useMemo(() => assignments.filter(item => ["accepted", "active"].includes(item.status)), [assignments]);
-  const completed = useMemo(() => assignments.filter(item => item.status === "completed"), [assignments]);
-
-  // 🔥 ASSIGNMENT ACTIONS
-  async function runAction(action, id) {
+  async function runAction(apiCall, id) {
     try {
-      await action(id, auth);
-      setMessage("Assignment updated successfully!");
+      await apiCall(id, auth);
+      flash("Updated.", "success");
       await refresh();
-    } catch (error) {
-      setMessage(`Action failed: ${error.message}`);
+    } catch (err) {
+      // Surface compliance block reason code when present
+      const suffix = err.message.includes("blocked") ? "" : "";
+      flash(err.message + suffix, "error");
     }
   }
 
-  // 🔥 VOICE LOGGING WORKFLOW (3-tap field capture)
-  async function handleRecordLog() {
-    if (!activeDayAssignmentId) {
-      setMessage("👆 Tap 'Start Day' on an active assignment first");
-      return;
-    }
+  // ─── Voice log (draft → submit) ──────────────────────────────────────────────
 
+  async function handleVoiceDraft() {
+    if (!activeDayId) { flash("Tap 'Start Day' on an active assignment first.", "warn"); return; }
     try {
-      const response = await submitVoiceLog(
-        {
-          assignmentId: activeDayAssignmentId,
-          text: draft.work_completed,
-          issues: draft.issues_blockers,
-          photos: draft.photos.filter(Boolean),
-          isDraft: true
-        },
-        auth
-      );
-
-      const prefill = response.data.prefill;
-      setDraft(prev => ({
-        ...prev,
-        work_completed: prefill.work_completed || prev.work_completed
-      }));
-      setMessage("🎤 Voice captured! AI detected categories. Review → Submit.");
-    } catch (error) {
-      setMessage(`Voice failed: ${error.message}`);
+      const res = await submitVoiceLog({
+        assignmentId: activeDayId,
+        text:   draft.work_completed,
+        issues: draft.issues_blockers,
+        photos: draft.photos.filter(Boolean),
+        isDraft: true
+      }, auth);
+      const prefill = res.data?.prefill ?? {};
+      setDraft((prev) => ({ ...prev, work_completed: prefill.work_completed || prev.work_completed }));
+      flash("Voice captured — review then submit.", "success");
+    } catch (err) {
+      flash(err.message, "error");
     }
   }
 
-  async function handleSubmitLog() {
-    if (!activeDayAssignmentId) {
-      setMessage("👆 Tap 'Start Day' first");
-      return;
-    }
-
+  async function handleSubmitVoice() {
+    if (!activeDayId) { flash("Tap 'Start Day' first.", "warn"); return; }
     const payload = {
-      assignmentId: activeDayAssignmentId,
-      workCompleted: draft.work_completed,
-      workSummary: draft.work_completed || "Field work completed",
+      assignmentId:   activeDayId,
+      workCompleted:  draft.work_completed,
+      workSummary:    draft.work_completed || "Field work completed",
       issuesBlockers: draft.issues_blockers || null,
-      photos: draft.photos.filter(Boolean),
-      weather: "manual_pending",
-      crewSize: 1,
-      hoursWorked: 8,
-      logDate: new Date().toISOString().slice(0, 10)
+      photos:         draft.photos.filter(Boolean),
+      weather:        "manual_pending",
+      crewSize:       1,
+      hoursWorked:    8,
+      logDate:        new Date().toISOString().slice(0, 10)
     };
-
     try {
       await submitDailyExecutionLog(payload, auth);
-      setMessage("✅ Log submitted & synced!");
+      flash("Log submitted.", "success");
       setDraft({ work_completed: "", issues_blockers: "", photos: [""] });
-      setPendingLogs(prev => prev.filter(item => item.assignmentId !== activeDayAssignmentId));
+      setPendingLogs((prev) => prev.filter((p) => p.assignmentId !== activeDayId));
       await refresh();
-    } catch (error) {
-      // 🔥 OFFLINE QUEUE
-      setPendingLogs(prev => [...prev, payload]);
-      setMessage(`💾 Saved offline (${pendingLogs.length + 1} queued). Tap Sync to retry.`);
+    } catch (err) {
+      // Compliance block: surface reason clearly
+      if (err.message.toLowerCase().includes("blocked")) {
+        flash(err.message, "error");
+        return;
+      }
+      // Network failure: queue offline
+      setPendingLogs((prev) => [...prev, payload]);
+      flash("Saved offline — will sync when connection returns.", "warn");
     }
   }
 
   async function retryPending() {
-    if (pendingLogs.length === 0) {
-      setMessage("✅ No offline logs to sync");
-      return;
-    }
-
+    if (pendingLogs.length === 0) { flash("Nothing queued.", "success"); return; }
     const remaining = [];
     for (const payload of pendingLogs) {
-      try {
-        await submitDailyExecutionLog(payload, auth);
-      } catch {
-        remaining.push(payload);
-      }
+      try { await submitDailyExecutionLog(payload, auth); }
+      catch { remaining.push(payload); }
     }
-
     setPendingLogs(remaining);
-    const synced = pendingLogs.length - remaining.length;
-    setMessage(synced > 0 ? `✅ Synced ${synced} logs (${remaining.length} remaining)` : "❌ Sync failed - check connection");
+    const n = pendingLogs.length - remaining.length;
+    flash(n > 0 ? `Synced ${n} log(s). ${remaining.length} still pending.` : "Sync failed — check connection.", n > 0 ? "success" : "error");
     await refresh();
   }
 
-  function setPhoto(index, value) {
-    setDraft(prev => {
-      const photos = [...prev.photos];
-      photos[index] = value;
-      return { ...prev, photos };
-    });
+  // ─── Form log ────────────────────────────────────────────────────────────────
+
+  function getLogForm(id) {
+    return logForms[id] ?? { logDate: new Date().toISOString().slice(0, 10), hoursWorked: "8", workSummary: "", issues: "" };
   }
 
-  // 🔥 FORM LOGGING (office alternative)
-  function getLogForm(assignmentId) {
-    return logForms[assignmentId] || {
-      logDate: new Date().toISOString().slice(0, 10),
-      hoursWorked: "8",
-      workSummary: "",
-      issues: ""
-    };
+  function setField(id, key, val) {
+    setLogForms((prev) => ({ ...prev, [id]: { ...getLogForm(id), [key]: val } }));
   }
 
-  function setLogFormValue(assignmentId, key, value) {
-    setLogForms(prev => ({
-      ...prev,
-      [assignmentId]: { ...getLogForm(assignmentId), [key]: value }
-    }));
-  }
-
-  async function handleSubmitFormLog(assignmentId, event) {
-    event.preventDefault();
+  async function handleFormLog(id, e) {
+    e.preventDefault();
     try {
-      const form = getLogForm(assignmentId);
-      await submitDailyLog(assignmentId, { ...form, hoursWorked: Number(form.hoursWorked) }, auth);
-      setMessage("📝 Form log submitted!");
-      // Clear form
-      setLogForms(prev => {
-        const newForms = { ...prev };
-        delete newForms[assignmentId];
-        return newForms;
-      });
+      const form = getLogForm(id);
+      await submitDailyLog(id, { ...form, hoursWorked: Number(form.hoursWorked) }, auth);
+      flash("Log submitted.", "success");
+      setLogForms((prev) => { const n = { ...prev }; delete n[id]; return n; });
       await refresh();
-    } catch (error) {
-      setMessage(`Form submit failed: ${error.message}`);
+    } catch (err) {
+      flash(err.message, "error");
     }
   }
 
+  // ─── Derived lists ────────────────────────────────────────────────────────────
+
+  const offered   = useMemo(() => assignments.filter((a) => a.status === "offered"),                        [assignments]);
+  const active    = useMemo(() => assignments.filter((a) => ["accepted", "active"].includes(a.status)),     [assignments]);
+  const completed = useMemo(() => assignments.filter((a) => a.status === "completed"),                      [assignments]);
+
+  // ─── Message banner ───────────────────────────────────────────────────────────
+
+  const bannerColor = {
+    success: { bg: "#d4edda", border: "#28a745", text: "#155724" },
+    warn:    { bg: "#fff3cd", border: "#ffc107", text: "#856404" },
+    error:   { bg: "#f8d7da", border: "#dc3545", text: "#721c24" },
+    info:    { bg: "#cce5ff", border: "#1976d2", text: "#004085" }
+  }[messageType] ?? { bg: "#cce5ff", border: "#1976d2", text: "#004085" };
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
   return (
-    <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1rem" }}>
-      <h1 style={{ fontSize: "2.5rem", color: "#1976d2", marginBottom: "1rem" }}>
-        👷 Worker Dashboard
-      </h1>
+    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "1.5rem 1rem" }}>
 
-      {/* 🔥 STATUS MESSAGE */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <h1 style={{ margin: 0, fontSize: "1.6rem", fontWeight: 700 }}>Worker Dashboard</h1>
+        <button onClick={refresh} style={{ ...btn.primary, padding: "0.5rem 1.2rem", fontSize: "0.85rem" }}>Refresh</button>
+      </div>
+
+      {/* Message banner */}
       {message && (
-        <div style={{
-          padding: "1rem 1.5rem",
-          marginBottom: "2rem",
-          background: message.includes("✅") || message.includes("synced") ? "#d4edda" : 
-                     message.includes("💾") ? "#fff3cd" : "#f8d7da",
-          borderRadius: "12px",
-          borderLeft: `5px solid ${message.includes("✅") ? "#28a745" : 
-                               message.includes("💾") ? "#ffc107" : "#dc3545"}`,
-          color: message.includes("✅") ? "#155724" : "#721c24"
-        }}>
+        <div style={{ padding: "0.9rem 1.2rem", marginBottom: "1.25rem", background: bannerColor.bg, borderRadius: "10px", borderLeft: `4px solid ${bannerColor.border}`, color: bannerColor.text, fontSize: "0.9rem" }}>
           {message}
+          <button onClick={() => setMessage("")} style={{ float: "right", background: "none", border: "none", cursor: "pointer", color: bannerColor.text, fontWeight: 700 }}>×</button>
         </div>
       )}
 
-      {/* 🔥 OFFLINE SYNC BAR */}
+      {/* Offline sync bar */}
       {pendingLogs.length > 0 && (
-        <div style={{
-          background: "#fff3cd",
-          padding: "1rem",
-          borderRadius: "8px",
-          marginBottom: "2rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center"
-        }}>
-          <span>💾 <strong>{pendingLogs.length}</strong> offline logs queued</span>
-          <button 
-            onClick={retryPending}
-            style={{
-              padding: "0.5rem 1.5rem",
-              background: "#ffc107",
-              color: "#212529",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "bold"
-            }}
-          >
-            🔄 Sync Now
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1.2rem", marginBottom: "1.25rem", background: "#fff3cd", borderRadius: "8px", border: "1px solid #ffc107" }}>
+          <span style={{ fontSize: "0.9rem" }}><strong>{pendingLogs.length}</strong> log{pendingLogs.length !== 1 ? "s" : ""} queued offline</span>
+          <button onClick={retryPending} style={{ ...btn.primary, padding: "0.45rem 1rem", fontSize: "0.85rem" }}>Sync Now</button>
         </div>
       )}
 
-      {/* 🔥 JOB OFFERS */}
-      <section style={{ marginBottom: "3rem" }}>
-        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>📋 Job Offers ({offered.length})</h2>
+      {/* ── Job Offers ─────────────────────────────────────────────────────────── */}
+      <section style={{ marginBottom: "2.5rem" }}>
+        <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "1rem", color: "#374151" }}>
+          Job Offers <span style={{ fontSize: "0.9rem", color: "#6b7280", fontWeight: 400 }}>({offered.length})</span>
+        </h2>
+
         {offered.length === 0 ? (
-          <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>
-            No new job offers. Check back soon! 🎯
-          </p>
+          <p style={{ color: "#9ca3af", textAlign: "center", padding: "1.5rem 0", fontSize: "0.9rem" }}>No pending offers.</p>
         ) : (
-          <div style={{ display: "grid", gap: "1rem" }}>
-            {offered.map(assignment => (
-              <div key={assignment.id} style={{
-                border: "1px solid #ddd",
-                borderRadius: "12px",
-                padding: "1.5rem",
-                background: "#f8f9fa",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between"
-              }}>
+          <div style={{ display: "grid", gap: "0.75rem" }}>
+            {offered.map((a) => (
+              <div key={a.id} style={{ border: "1px solid #e5e7eb", borderRadius: "12px", padding: "1.25rem 1.5rem", background: "white", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}>
-                    {assignment.job_title}
-                  </h3>
-                  <p style={{ margin: 0, color: "#666" }}>Status: <strong>{assignment.status}</strong></p>
+                  <strong style={{ color: "#1976d2" }}>{a.job_title}</strong>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.82rem", color: "#6b7280" }}>Offered</p>
                 </div>
-                <div style={{ display: "flex", gap: "1rem" }}>
-                  <button 
-                    onClick={() => runAction(acceptAssignment, assignment.id)}
-                    style={{
-                      padding: "1rem 2rem",
-                      background: "#28a745",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: "bold",
-                      cursor: "pointer"
-                    }}
-                  >
-                    ✅ Accept
-                  </button>
-                  <button 
-                    onClick={() => runAction(declineAssignment, assignment.id)}
-                    style={{
-                      padding: "1rem 2rem",
-                      background: "#dc3545",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: "bold",
-                      cursor: "pointer"
-                    }}
-                  >
-                    ❌ Decline
-                  </button>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <button onClick={() => runAction(acceptAssignment, a.id)} style={btn.success}>Accept</button>
+                  <button onClick={() => runAction(declineAssignment, a.id)} style={btn.danger}>Decline</button>
                 </div>
               </div>
             ))}
@@ -325,185 +289,153 @@ export function WorkerDashboardPage() {
         )}
       </section>
 
-      {/* 🔥 ACTIVE JOBS w/ LOGGING */}
-      <section style={{ marginBottom: "3rem" }}>
-        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>⚡ Active Jobs ({active.length})</h2>
-        <div style={{ display: "grid", gap: "2rem" }}>
-          {active.map(assignment => (
-            <article key={assignment.id} style={{
-              border: "1px solid #dee2e6",
-              borderRadius: "16px",
-              padding: "2rem",
-              background: "white",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-            }}>
-              <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                <h3 style={{ margin: 0, color: "#1976d2" }}>{assignment.job_title}</h3>
-                <span style={{ 
-                  padding: "0.5rem 1rem", 
-                  background: "#e3f2fd", 
-                  borderRadius: "20px", 
-                  fontWeight: "bold",
-                  fontSize: "0.9rem"
-                }}>
-                  {assignment.status}
-                </span>
-              </header>
+      {/* ── Active Jobs ────────────────────────────────────────────────────────── */}
+      <section style={{ marginBottom: "2.5rem" }}>
+        <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "1rem", color: "#374151" }}>
+          Active Jobs <span style={{ fontSize: "0.9rem", color: "#6b7280", fontWeight: 400 }}>({active.length})</span>
+        </h2>
 
-              {/* 🔥 ASSIGNMENT ACTIONS */}
-              <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
-                {assignment.status === "accepted" && (
-                  <button 
-                    onClick={() => runAction(startAssignment, assignment.id)}
-                    style={buttonStyle.primary}
-                  >
-                    🚀 Mark Started
-                  </button>
-                )}
-                {assignment.status === "active" && (
-                  <button 
-                    onClick={() => runAction(completeAssignment, assignment.id)}
-                    style={buttonStyle.success}
-                  >
-                    🎉 Mark Completed
-                  </button>
-                )}
-                <button 
-                  onClick={() => setActiveDayAssignmentId(assignment.id)}
-                  style={{
-                    ...buttonStyle.primary,
-                    background: activeDayAssignmentId === assignment.id ? "#1976d2" : "#4dabf7"
-                  }}
-                >
-                  📝 {activeDayAssignmentId === assignment.id ? "Active" : "Start Day"}
-                </button>
-              </div>
+        {active.length === 0 ? (
+          <p style={{ color: "#9ca3af", textAlign: "center", padding: "1.5rem 0", fontSize: "0.9rem" }}>No active jobs.</p>
+        ) : (
+          <div style={{ display: "grid", gap: "1.5rem" }}>
+            {active.map((a) => (
+              <article key={a.id} style={{ border: "1px solid #e5e7eb", borderRadius: "14px", padding: "1.5rem", background: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
 
-              {/* 🔥 QUICK VOICE LOG (3-tap field workflow) */}
-              {activeDayAssignmentId === assignment.id && (
-                <details style={{ marginBottom: "1.5rem" }}>
-                  <summary style={{ 
-                    fontWeight: "bold", 
-                    padding: "1rem", 
-                    background: "#e3f2fd", 
-                    borderRadius: "8px", 
-                    cursor: "pointer" 
-                  }}>
-                    🎤 Quick Voice Log (3 taps)
-                  </summary>
-                  <div style={{ padding: "1.5rem", background: "#f8f9fa", borderRadius: "8px" }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <strong style={{ fontSize: "1rem", color: "#1976d2" }}>{a.job_title}</strong>
+                  <span style={{ padding: "0.3rem 0.85rem", background: "#e0f2fe", borderRadius: "20px", fontSize: "0.8rem", fontWeight: 600, color: "#0369a1" }}>{a.status}</span>
+                </div>
+
+                {/* Lifecycle actions */}
+                <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+                  {a.status === "accepted" && (
+                    <button onClick={() => runAction(startAssignment, a.id)} style={btn.primary}>Mark Started</button>
+                  )}
+                  {a.status === "active" && (
+                    <button onClick={() => runAction(completeAssignment, a.id)} style={btn.success}>Mark Completed</button>
+                  )}
+                  <button
+                    onClick={() => setActiveDayId((prev) => (prev === a.id ? null : a.id))}
+                    style={{ ...btn.primary, background: activeDayId === a.id ? "#1565c0" : "#4dabf7" }}
+                  >
+                    {activeDayId === a.id ? "Close Log Panel" : "Start Day / Log"}
+                  </button>
+                </div>
+
+                {/* Day log panel */}
+                {activeDayId === a.id && (
+                  <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "1.25rem", marginBottom: "1rem", border: "1px solid #e2e8f0" }}>
+                    <p style={{ margin: "0 0 0.85rem", fontSize: "0.85rem", fontWeight: 600, color: "#475569" }}>Quick Day Log</p>
+
                     <textarea
                       rows={3}
-                      placeholder="What did you do today? (voice will auto-fill)"
+                      placeholder="What was completed today?"
                       value={draft.work_completed}
-                      onChange={e => setDraft(prev => ({ ...prev, work_completed: e.target.value }))}
-                      style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }}
+                      onChange={(e) => setDraft((d) => ({ ...d, work_completed: e.target.value }))}
+                      style={fieldStyle}
                     />
                     <textarea
                       rows={2}
-                      placeholder="Any issues/blockers?"
+                      placeholder="Any issues or blockers? (optional)"
                       value={draft.issues_blockers}
-                      onChange={e => setDraft(prev => ({ ...prev, issues_blockers: e.target.value }))}
-                      style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }}
+                      onChange={(e) => setDraft((d) => ({ ...d, issues_blockers: e.target.value }))}
+                      style={fieldStyle}
                     />
-                    <input
-                      placeholder="Photo URL (optional)"
-                      value={draft.photos[0] || ""}
-                      onChange={e => setPhoto(0, e.target.value)}
-                      style={{ width: "100%", padding: "1rem", borderRadius: "8px", marginBottom: "1rem" }}
-                    />
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-                      <button 
-                        onClick={handleRecordLog}
-                        style={buttonStyle.primary}
-                      >
-                        🎤 Record Voice Log
-                      </button>
-                      <button 
-                        onClick={handleSubmitLog}
-                        style={buttonStyle.success}
-                      >
-                        ✅ Submit Log
-                      </button>
+
+                    <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <button onClick={handleVoiceDraft} style={{ ...btn.primary, background: "#7c3aed" }}>AI Draft</button>
+                      <button onClick={handleSubmitVoice} style={btn.success}>Submit Log</button>
                     </div>
                   </div>
+                )}
+
+                {/* Detailed form log */}
+                <details style={{ marginBottom: "0.75rem" }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", color: "#6b7280", padding: "0.5rem 0" }}>
+                    Detailed form log
+                  </summary>
+                  <form onSubmit={(e) => handleFormLog(a.id, e)} style={{ paddingTop: "0.75rem", display: "grid", gap: "0.5rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                      <input
+                        type="date"
+                        value={getLogForm(a.id).logDate}
+                        onChange={(e) => setField(a.id, "logDate", e.target.value)}
+                        required
+                        style={fieldStyle}
+                      />
+                      <input
+                        type="number"
+                        min="0" max="24" step="0.25"
+                        placeholder="Hours worked"
+                        value={getLogForm(a.id).hoursWorked}
+                        onChange={(e) => setField(a.id, "hoursWorked", e.target.value)}
+                        required
+                        style={fieldStyle}
+                      />
+                    </div>
+                    <textarea
+                      rows={3}
+                      placeholder="Work summary"
+                      value={getLogForm(a.id).workSummary}
+                      onChange={(e) => setField(a.id, "workSummary", e.target.value)}
+                      required
+                      style={{ ...fieldStyle, resize: "vertical" }}
+                    />
+                    <textarea
+                      rows={2}
+                      placeholder="Issues (optional)"
+                      value={getLogForm(a.id).issues}
+                      onChange={(e) => setField(a.id, "issues", e.target.value)}
+                      style={{ ...fieldStyle, resize: "vertical" }}
+                    />
+                    <button type="submit" style={btn.primary}>Submit Detailed Log</button>
+                  </form>
                 </details>
-              )}
 
-              {/* 🔥 FORM LOG (office alternative) */}
-              <details style={{ marginBottom: "1.5rem" }}>
-                <summary style={{ 
-                  fontWeight: "bold", 
-                  padding: "1rem", 
-                  background: "#f8f9fa", 
-                  borderRadius: "8px", 
-                  cursor: "pointer" 
-                }}>
-                  📝 Detailed Form Log
-                </summary>
-                <form 
-                  onSubmit={e => handleSubmitFormLog(assignment.id, e)}
-                  style={{ padding: "1.5rem", background: "#fafbfc" }}
-                >
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-                    <input
-                      type="date"
-                      value={getLogForm(assignment.id).logDate}
-                      onChange={e => setLogFormValue(assignment.id, "logDate", e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      step="0.25"
-                      placeholder="Hours"
-                      value={getLogForm(assignment.id).hoursWorked}
-                      onChange={e => setLogFormValue(assignment.id, "hoursWorked", e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
+                {/* Recent logs summary */}
+                <details>
+                  <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "0.85rem", color: "#6b7280", padding: "0.5rem 0" }}>
+                    Recent logs ({(logsByAssignment[a.id] ?? []).length})
+                  </summary>
+                  <div style={{ marginTop: "0.5rem", maxHeight: "180px", overflowY: "auto" }}>
+                    {(logsByAssignment[a.id] ?? []).length === 0 ? (
+                      <p style={{ fontSize: "0.82rem", color: "#9ca3af" }}>No logs yet.</p>
+                    ) : (
+                      (logsByAssignment[a.id] ?? []).slice(0, 8).map((log) => (
+                        <div key={log.id} style={{ padding: "0.5rem 0", borderBottom: "1px solid #f3f4f6", fontSize: "0.82rem" }}>
+                          <strong>{log.log_date}:</strong> {log.hours_worked}h — {log.work_summary}
+                          {log.issues && <span style={{ color: "#dc2626", marginLeft: "0.5rem" }}>⚠ {log.issues}</span>}
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <textarea
-                    rows={4}
-                    placeholder="Detailed work summary"
-                    value={getLogForm(assignment.id).workSummary}
-                    onChange={e => setLogFormValue(assignment.id, "workSummary", e.target.value)}
-                    required
-                    style={{ ...inputStyle, height: "120px", marginBottom: "1rem" }}
-                  />
-                  <textarea
-                    rows={2}
-                    placeholder="Issues/problems (optional)"
-                    value={getLogForm(assignment.id).issues}
-                    onChange={e => setLogFormValue(assignment.id, "issues", e.target.value)}
-                    style={{ ...inputStyle, height: "80px" }}
-                  />
-                  <button 
-                    type="submit"
-                    style={buttonStyle.primary}
-                  >
-                    📋 Submit Detailed Log
-                  </button>
-                </form>
-              </details>
+                </details>
 
-              {/* 🔥 RECENT LOGS */}
-              <div>
-                <h4 style={{ marginBottom: "0.5rem" }}>📄 Recent Logs ({(logsByAssignment[assignment.id] || []).length})</h4>
-                <div style={{ 
-                  maxHeight: "200px", 
-                  overflowY: "auto", 
-                  border: "1px solid #eee", 
-                  borderRadius: "8px", 
-                  padding: "1rem" 
-                }}>
-                  {(logsByAssignment[assignment.id] || []).slice(0, 5).map(log => (
-                    <div key={log.id} style={{ 
-                      padding: "0.75rem", 
-                      borderBottom: "1px solid #f0f0f0",
-                      fontSize: "0.9rem"
-                    }}>
-                      <strong>{log.log_date}:</strong> {log.hours_worked}h — {log.work_summary}
-                      {log.issues && <span style={{ color: "#d32f2f", marginLeft:
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Completed Jobs ─────────────────────────────────────────────────────── */}
+      {completed.length > 0 && (
+        <section>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "1rem", color: "#374151" }}>
+            Completed <span style={{ fontSize: "0.9rem", color: "#6b7280", fontWeight: 400 }}>({completed.length})</span>
+          </h2>
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            {completed.map((a) => (
+              <div key={a.id} style={{ padding: "0.85rem 1.2rem", border: "1px solid #d1fae5", borderRadius: "8px", background: "#f0fdf4", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <strong style={{ fontSize: "0.9rem" }}>{a.job_title}</strong>
+                <span style={{ fontSize: "0.8rem", color: "#15803d", fontWeight: 600 }}>Completed</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+    </div>
+  );
+}

@@ -1,21 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-// 🔥 FULL API FEATURES (merged both branches)
-import { 
-  createJob, 
-  deleteJob, 
-  getJobErosion, 
-  listEscalations, 
-  listJobs, 
-  listSkills 
+import {
+  createJob,
+  deleteJob,
+  getJobErosion,
+  listEscalations,
+  listJobs,
+  listSkills,
+  getMyCompany
 } from "../services/api.js";
+import { getStoredAuth } from "../hooks/useAuth.js";
+
+const CONTRACTOR_FALLBACK = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
 
 export function ContractorDashboardPage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+  const auth = getStoredAuth() ?? CONTRACTOR_FALLBACK;
   const [skillsCatalog, setSkillsCatalog] = useState([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState([]);
   const [jobs, setJobs] = useState([]);
-  // 🔥 CONSTRUCTION ANALYTICS (merged codex branch)
+  const [company, setCompany] = useState(null);
   const [pendingEscalations, setPendingEscalations] = useState(0);
   const [profitImpact, setProfitImpact] = useState(null);
   const [message, setMessage] = useState("");
@@ -36,16 +39,17 @@ export function ContractorDashboardPage() {
 
   async function refresh() {
     try {
-      // 🔥 PARALLEL DATA LOAD (3x faster)
-      const [skillsResponse, jobsResponse, escalationsResponse] = await Promise.all([
-        listSkills(auth), 
-        listJobs(auth), 
-        listEscalations(auth, "pending")
+      const [skillsResponse, jobsResponse, escalationsResponse, companyResponse] = await Promise.all([
+        listSkills(auth),
+        listJobs(auth),
+        listEscalations(auth, "pending"),
+        getMyCompany(auth).catch(() => null)
       ]);
-      
+
       setSkillsCatalog(skillsResponse.data);
       setJobs(jobsResponse.data);
       setPendingEscalations(escalationsResponse.data?.length || 0);
+      setCompany(companyResponse?.data ?? null);
 
       // 🔥 PROFIT IMPACT (top job analytics)
       const firstJobId = jobsResponse.data?.[0]?.id;
@@ -137,6 +141,57 @@ export function ContractorDashboardPage() {
       <h1 style={{ fontSize: "2.5rem", color: "#1976d2", marginBottom: "1rem" }}>
         🏗️ Contractor Dashboard
       </h1>
+
+      {/* Company compliance status banner */}
+      {company === null ? (
+        <div style={{ padding: "1rem 1.5rem", marginBottom: "1.5rem", background: "#f3f4f6", borderRadius: "10px", border: "1px solid #d1d5db", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#374151", fontSize: "0.95rem" }}>No company registered yet.</span>
+          <Link to="/contractor-profile" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.9rem" }}>Register company →</Link>
+        </div>
+      ) : (
+        <div style={{
+          padding: "0.9rem 1.5rem",
+          marginBottom: "1.5rem",
+          borderRadius: "10px",
+          border: "1px solid",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: company.compliance_status === "ACTIVE"    ? "#f0fdf4"
+                    : company.compliance_status === "SUSPENDED" ? "#fff1f2"
+                    : "#fefce8",
+          borderColor: company.compliance_status === "ACTIVE"    ? "#bbf7d0"
+                      : company.compliance_status === "SUSPENDED" ? "#fecdd3"
+                      : "#fde68a"
+        }}>
+          <div>
+            <strong style={{ fontSize: "0.95rem" }}>{company.name}</strong>
+            <span style={{
+              marginLeft: "0.75rem",
+              padding: "0.2rem 0.6rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              background: company.compliance_status === "ACTIVE"    ? "#dcfce7"
+                        : company.compliance_status === "SUSPENDED" ? "#fee2e2"
+                        : "#fef3c7",
+              color: company.compliance_status === "ACTIVE"    ? "#15803d"
+                    : company.compliance_status === "SUSPENDED" ? "#b91c1c"
+                    : "#92400e"
+            }}>
+              {company.compliance_status ?? "PENDING"}
+            </span>
+            {company.compliance_status !== "ACTIVE" && (
+              <span style={{ marginLeft: "0.75rem", fontSize: "0.82rem", color: "#6b7280" }}>
+                Workers cannot accept assignments until company is ACTIVE.
+              </span>
+            )}
+          </div>
+          <Link to="/dashboard/triage" style={{ color: "#1976d2", fontWeight: 600, fontSize: "0.85rem" }}>
+            Operations Triage →
+          </Link>
+        </div>
+      )}
 
       {/* 🔥 ESCALATION + PROFIT ALERTS (codex analytics) */}
       <div style={{ 
@@ -416,7 +471,6 @@ export function ContractorDashboardPage() {
   );
 }
 
-// 🔥 SHARED STYLES
 const inputStyle = {
   padding: "1rem",
   border: "1px solid #ddd",
@@ -424,34 +478,3 @@ const inputStyle = {
   fontSize: "1rem",
   transition: "border-color 0.2s ease"
 };
-
-✅ COMPLETE FILE - 100% production ready
-✅ ALL merge conflicts resolved
-✅ CONSTRUCTION ANALYTICS:
-   ├── Escalation queue badge
-   ├── Real-time profit impact
-   ├── Pivot dashboard link
-✅ ENHANCED UX:
-   ├── Responsive grid forms
-   ├── Visual skill selection
-   ├── Active job cards
-   ├── Loading states
-   ├── Form validation
-✅ MOBILE PERFECT:
-   ├── Touch-friendly buttons
-   ├── Responsive layouts
-   ├── Zero layout shift
-
-1. Contractor: Create job → AI matches concrete specialists
-2. Dashboard: See profit erosion → Get command "Fix rebar issue"
-3. Escalations: 3 pending → Review → Revenue protected
-4. Analytics: Daily pivot → $13M ARR optimization
-
-✅ Visual feedback (hover/active)
-✅ Form validation (skills required)
-✅ Error handling (try/catch)
-✅ Optimistic updates
-✅ Mobile-first responsive
-✅ Accessibility ready
-
-ContractorDashboardPage.jsx → ✅ Production ready | Analytics LIVE | Revenue optimized!

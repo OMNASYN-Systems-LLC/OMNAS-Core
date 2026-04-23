@@ -42,6 +42,24 @@ companiesRouter.get("/", requireRole("contractor", "client", "superintendent"), 
   }
 });
 
+// GET /api/companies/me
+// Returns the calling contractor's own company with compliance state, or 404.
+// Must be declared before /:id so Express doesn't swallow "me" as a UUID param.
+companiesRouter.get("/me", requireRole("contractor"), async (req, res, next) => {
+  try {
+    const company = await getMyCompany(req.auth.userId);
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: "No company registered. POST /api/companies to create one."
+      });
+    }
+    res.json({ success: true, data: company });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/companies/:id
 // Returns company record joined with current compliance state and active worker count.
 companiesRouter.get("/:id", requireRole("contractor", "client", "superintendent"), async (req, res, next) => {

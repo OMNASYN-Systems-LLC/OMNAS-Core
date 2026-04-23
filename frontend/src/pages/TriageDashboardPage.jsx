@@ -251,7 +251,8 @@ function LockedJobsPanel({ jobs, auth }) {
 
 // ─── Panel: Compliance Alerts ─────────────────────────────────────────────────
 
-function ComplianceAlertsPanel({ alerts, auth, onOverrideSuccess }) {
+// canOverride: only contractors and superintendents may grant waivers.
+function ComplianceAlertsPanel({ alerts, auth, onOverrideSuccess, canOverride }) {
   const [modal, setModal] = useState(null);
 
   if (alerts.length === 0) {
@@ -286,17 +287,19 @@ function ComplianceAlertsPanel({ alerts, auth, onOverrideSuccess }) {
                     {a.activeWorkerCount} active worker{a.activeWorkerCount !== 1 ? "s" : ""} · Since {new Date(a.effectiveAt).toLocaleDateString()}
                   </p>
                 </div>
-                <button
-                  onClick={() => setModal({
-                    overrideType: "ASSIGNMENT_ACCEPT",
-                    reasonCode:   a.reasonCode ?? a.status,
-                    companyId:    a.companyId,
-                    workerUserId: null
-                  })}
-                  style={btn("ghost")}
-                >
-                  Grant Override
-                </button>
+                {canOverride && (
+                  <button
+                    onClick={() => setModal({
+                      overrideType: "ASSIGNMENT_ACCEPT",
+                      reasonCode:   a.reasonCode ?? a.status,
+                      companyId:    a.companyId,
+                      workerUserId: null
+                    })}
+                    style={btn("ghost")}
+                  >
+                    Grant Override
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -317,17 +320,19 @@ function ComplianceAlertsPanel({ alerts, auth, onOverrideSuccess }) {
                     Most recent expiry: {a.mostRecentExpiry ? new Date(a.mostRecentExpiry).toLocaleDateString() : "—"}
                   </p>
                 </div>
-                <button
-                  onClick={() => setModal({
-                    overrideType: "CHECKIN",
-                    reasonCode:   "CREDENTIAL_EXPIRED",
-                    workerUserId: a.workerUserId,
-                    companyId:    null
-                  })}
-                  style={btn("ghost")}
-                >
-                  Grant Override
-                </button>
+                {canOverride && (
+                  <button
+                    onClick={() => setModal({
+                      overrideType: "CHECKIN",
+                      reasonCode:   "CREDENTIAL_EXPIRED",
+                      workerUserId: a.workerUserId,
+                      companyId:    null
+                    })}
+                    style={btn("ghost")}
+                  >
+                    Grant Override
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -391,11 +396,13 @@ function GhostEventsPanel({ ghostEvents }) {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-// Fallback for pilot: contractor sees their own triage view.
 const FALLBACK_AUTH = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+const OVERRIDE_ROLES = ["contractor", "superintendent"];
+const AUTO_REFRESH_MS = 30_000;
 
 export function TriageDashboardPage() {
-  const auth = getStoredAuth() ?? FALLBACK_AUTH;
+  const auth       = getStoredAuth() ?? FALLBACK_AUTH;
+  const canOverride = OVERRIDE_ROLES.includes(auth.role);
 
   const [summary, setSummary]   = useState(null);
   const [loading, setLoading]   = useState(true);
@@ -416,7 +423,11 @@ export function TriageDashboardPage() {
     }
   }
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => {
+    refresh();
+    const id = setInterval(refresh, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   function handleOverrideSuccess(msg) {
     setFlash(msg);
@@ -440,7 +451,7 @@ export function TriageDashboardPage() {
           <h1 style={{ margin: 0, fontSize: "1.6rem", fontWeight: 700 }}>Operations Triage</h1>
           {meta.generatedAt && (
             <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "#94a3b8" }}>
-              Updated {new Date(meta.generatedAt).toLocaleTimeString()}
+              Updated {new Date(meta.generatedAt).toLocaleTimeString()} · auto-refreshes every 30s
             </p>
           )}
         </div>
@@ -499,6 +510,7 @@ export function TriageDashboardPage() {
               alerts={summary.complianceAlerts ?? []}
               auth={auth}
               onOverrideSuccess={handleOverrideSuccess}
+              canOverride={canOverride}
             />
           )}
           {tab === 2 && (
