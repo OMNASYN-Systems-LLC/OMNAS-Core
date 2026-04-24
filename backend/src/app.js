@@ -1,0 +1,57 @@
+import cors from "cors";
+import express from "express";
+import helmet from "helmet";
+import morgan from "morgan";
+import { env } from "./config/env.js";
+import { authRouter } from "./routes/authRoutes.js";
+import { healthRouter } from "./routes/healthRoutes.js";
+import { workerRouter } from "./modules/workers/routes.js";
+import { contractorRouter } from "./modules/contractors/routes.js";
+import { skillsRouter } from "./modules/skills/routes.js";
+import { jobsRouter } from "./modules/jobs/routes.js";
+import { matchingRouter } from "./modules/matching/routes.js";
+import { recommendationsRouter } from "./modules/recommendations/routes.js";
+import { schedulingRouter } from "./modules/scheduling/routes.js";
+import { assignmentsRouter } from "./modules/assignments/routes.js";
+import { assignmentLogsRouter, logsRouter } from "./modules/logs/routes.js";
+import { opportunitiesRouter } from "./modules/opportunities/routes.js";
+import { escalationsRouter } from "./modules/escalations/routes.js";
+import { financialRouter } from "./modules/financial/financial.routes.js";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { assemblerRouter } from "./modules/assembler/routes.js";
+import { calendarRouter } from "./modules/calendar/calendar.routes.js";
+import { companiesRouter } from "./modules/companies/companies.routes.js";
+import { registerHandlers } from "./orchestrator/registerHandlers.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+
+export const app = express();
+registerHandlers();
+
+app.use(helmet());
+app.use(cors({ origin: env.frontendUrl }));
+app.use(express.json());
+app.use(morgan(env.nodeEnv === "production" ? "combined" : "dev"));
+
+app.use("/api/health", healthRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/workers", workerRouter);
+app.use("/api/contractors", contractorRouter);
+app.use("/api/skills", skillsRouter);
+app.use("/api/jobs", matchingRouter);
+app.use("/api/jobs", recommendationsRouter);
+app.use("/api/jobs", schedulingRouter);
+app.use("/api/jobs", jobsRouter);
+app.use("/api/jobs", financialRouter);
+app.use("/api/jobs", dashboardRouter);
+app.use("/api/dashboard", dashboardRouter);
+app.use("/api/jobs", assemblerRouter);
+app.use("/api/assignments", assignmentsRouter);
+app.use("/api/assignments", assignmentLogsRouter);
+app.use("/api/logs", logsRouter);
+app.use("/api/opportunities", opportunitiesRouter);
+app.use("/api/escalations", escalationsRouter);
+app.use("/api/calendar", calendarRouter);
+app.use("/api/companies", companiesRouter);
+
+app.use(notFoundHandler);
+app.use(errorHandler);

@@ -1,0 +1,16 @@
+{
+  "trade_mobility_index": {
+    "ELECTRICIAN": 0.9,
+    "PAINTER": 0.9,
+    "PLUMBER": 0.7,
+    "HVAC": 0.5,
+    "DRYWALL": 0.3,
+    "CONCRETE": 0.1
+  },
+  "priority_weights": {
+    "critical_path": 10,
+    "equipment": 5,
+    "completion_bonus": 3
+  },
+  "completion_threshold": 0.75
+}
