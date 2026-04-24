@@ -18,10 +18,10 @@ export function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    try {
-      // Backend call kept for health-check; it doesn't persist users in pilot mode.
-      await login(form);
+    // Backend call is a non-persisting health-check in pilot mode; failures are non-fatal.
+    try { await login(form); } catch { /* backend offline — proceed with localStorage */ }
 
+    try {
       const users = getRegisteredUsers();
       const user = users[form.email];
       if (!user) {
