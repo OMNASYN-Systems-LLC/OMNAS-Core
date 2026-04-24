@@ -191,3 +191,12 @@ export function listEscalations(auth, status = "pending") {
 export function decideEscalation(id, payload, auth) {
   return request(`/escalations/${id}/decision`, { method: "POST", payload, auth });
 }
+
+// 🔥 TRIAGE (LOCKED_JOBS | COMPLIANCE_ALERTS | GHOST_EVENTS)
+export function getTriageSummary(auth) {
+  return request("/dashboard/triage", { auth });
+}
+
+export function getTriageBlockLog(entityType, entityId, auth) {
+  return request(`/dashboard/triage/blocks/${entityType}/${entityId}`, { auth });
+}

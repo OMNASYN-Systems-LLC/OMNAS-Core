@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { addWorkerSkill, getWorkerProfile, listSkills, removeWorkerSkill, upsertWorkerProfile } from "../services/api.js";
+import { getAuth } from "../hooks/useAuth.js";
 
 export function WorkerProfilePage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000001", role: "worker" };
+  const auth = getAuth();
+  if (!auth) return <p>Please <Link to="/login">log in</Link> to view your profile.</p>;
   const [profileForm, setProfileForm] = useState({
     firstName: "",
     lastName: "",

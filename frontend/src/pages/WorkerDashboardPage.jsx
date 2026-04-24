@@ -1,10 +1,5 @@
-# ✅ **COMPLETE WorkerDashboardPage.jsx - COPY/PASTE TO GITHUB**
-
-**Ultimate construction worker dashboard with voice logging + offline sync!**
-
-```javascript
 import { useEffect, useMemo, useState } from "react";
-// 🔥 FULL API FEATURES (merged both branches)
+import { Link } from "react-router-dom";
 import {
   acceptAssignment,
   completeAssignment,
@@ -16,6 +11,7 @@ import {
   submitDailyExecutionLog,
   submitVoiceLog
 } from "../services/api.js";
+import { getAuth } from "../hooks/useAuth.js";
 
 const PENDING_KEY = "omnas_pending_logs_v1";
 
@@ -33,10 +29,9 @@ function savePending(items) {
 }
 
 export function WorkerDashboardPage() {
-  const auth = { userId: "00000000-0000-0000-0000-000000000001", role: "worker" };
+  const auth = getAuth();
   const [assignments, setAssignments] = useState([]);
   const [logsByAssignment, setLogsByAssignment] = useState({});
-  // 🔥 FULL STATE (voice + form + offline)
   const [message, setMessage] = useState("");
   const [activeDayAssignmentId, setActiveDayAssignmentId] = useState(null);
   const [draft, setDraft] = useState({ work_completed: "", issues_blockers: "", photos: [""] });
@@ -49,7 +44,6 @@ export function WorkerDashboardPage() {
       const assignmentRows = response.data;
       setAssignments(assignmentRows);
 
-      // 🔥 PARALLEL LOG LOADING
       const logsEntries = await Promise.all(
         assignmentRows.map(async (assignment) => {
           const logsResponse = await getAssignmentLogs(assignment.id, auth);
@@ -63,7 +57,6 @@ export function WorkerDashboardPage() {
     }
   }
 
-  // 🔥 OFFLINE SYNC
   useEffect(() => {
     savePending(pendingLogs);
   }, [pendingLogs]);
@@ -72,12 +65,14 @@ export function WorkerDashboardPage() {
     refresh();
   }, []);
 
-  // 🔥 ASSIGNMENT FILTERS
   const offered = useMemo(() => assignments.filter(item => item.status === "offered"), [assignments]);
   const active = useMemo(() => assignments.filter(item => ["accepted", "active"].includes(item.status)), [assignments]);
   const completed = useMemo(() => assignments.filter(item => item.status === "completed"), [assignments]);
 
-  // 🔥 ASSIGNMENT ACTIONS
+  if (!auth) {
+    return <p>Please <Link to="/login">log in</Link> to access your dashboard.</p>;
+  }
+
   async function runAction(action, id) {
     try {
       await action(id, auth);
@@ -88,10 +83,9 @@ export function WorkerDashboardPage() {
     }
   }
 
-  // 🔥 VOICE LOGGING WORKFLOW (3-tap field capture)
   async function handleRecordLog() {
     if (!activeDayAssignmentId) {
-      setMessage("👆 Tap 'Start Day' on an active assignment first");
+      setMessage("Tap 'Start Day' on an active assignment first");
       return;
     }
 
@@ -112,7 +106,7 @@ export function WorkerDashboardPage() {
         ...prev,
         work_completed: prefill.work_completed || prev.work_completed
       }));
-      setMessage("🎤 Voice captured! AI detected categories. Review → Submit.");
+      setMessage("Voice captured! AI detected categories. Review then Submit.");
     } catch (error) {
       setMessage(`Voice failed: ${error.message}`);
     }
@@ -120,7 +114,7 @@ export function WorkerDashboardPage() {
 
   async function handleSubmitLog() {
     if (!activeDayAssignmentId) {
-      setMessage("👆 Tap 'Start Day' first");
+      setMessage("Tap 'Start Day' first");
       return;
     }
 
@@ -138,20 +132,19 @@ export function WorkerDashboardPage() {
 
     try {
       await submitDailyExecutionLog(payload, auth);
-      setMessage("✅ Log submitted & synced!");
+      setMessage("Log submitted and synced!");
       setDraft({ work_completed: "", issues_blockers: "", photos: [""] });
       setPendingLogs(prev => prev.filter(item => item.assignmentId !== activeDayAssignmentId));
       await refresh();
     } catch (error) {
-      // 🔥 OFFLINE QUEUE
       setPendingLogs(prev => [...prev, payload]);
-      setMessage(`💾 Saved offline (${pendingLogs.length + 1} queued). Tap Sync to retry.`);
+      setMessage(`Saved offline (${pendingLogs.length + 1} queued). Tap Sync to retry.`);
     }
   }
 
   async function retryPending() {
     if (pendingLogs.length === 0) {
-      setMessage("✅ No offline logs to sync");
+      setMessage("No offline logs to sync");
       return;
     }
 
@@ -166,7 +159,7 @@ export function WorkerDashboardPage() {
 
     setPendingLogs(remaining);
     const synced = pendingLogs.length - remaining.length;
-    setMessage(synced > 0 ? `✅ Synced ${synced} logs (${remaining.length} remaining)` : "❌ Sync failed - check connection");
+    setMessage(synced > 0 ? `Synced ${synced} logs (${remaining.length} remaining)` : "Sync failed — check connection");
     await refresh();
   }
 
@@ -178,7 +171,6 @@ export function WorkerDashboardPage() {
     });
   }
 
-  // 🔥 FORM LOGGING (office alternative)
   function getLogForm(assignmentId) {
     return logForms[assignmentId] || {
       logDate: new Date().toISOString().slice(0, 10),
@@ -200,8 +192,7 @@ export function WorkerDashboardPage() {
     try {
       const form = getLogForm(assignmentId);
       await submitDailyLog(assignmentId, { ...form, hoursWorked: Number(form.hoursWorked) }, auth);
-      setMessage("📝 Form log submitted!");
-      // Clear form
+      setMessage("Form log submitted!");
       setLogForms(prev => {
         const newForms = { ...prev };
         delete newForms[assignmentId];
@@ -216,26 +207,22 @@ export function WorkerDashboardPage() {
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "2rem 1rem" }}>
       <h1 style={{ fontSize: "2.5rem", color: "#1976d2", marginBottom: "1rem" }}>
-        👷 Worker Dashboard
+        Worker Dashboard
       </h1>
 
-      {/* 🔥 STATUS MESSAGE */}
       {message && (
         <div style={{
           padding: "1rem 1.5rem",
           marginBottom: "2rem",
-          background: message.includes("✅") || message.includes("synced") ? "#d4edda" : 
-                     message.includes("💾") ? "#fff3cd" : "#f8d7da",
+          background: message.includes("synced") || message.includes("submitted") ? "#d4edda" : "#f8d7da",
           borderRadius: "12px",
-          borderLeft: `5px solid ${message.includes("✅") ? "#28a745" : 
-                               message.includes("💾") ? "#ffc107" : "#dc3545"}`,
-          color: message.includes("✅") ? "#155724" : "#721c24"
+          borderLeft: "5px solid #dc3545",
+          color: "#721c24"
         }}>
           {message}
         </div>
       )}
 
-      {/* 🔥 OFFLINE SYNC BAR */}
       {pendingLogs.length > 0 && (
         <div style={{
           background: "#fff3cd",
@@ -246,78 +233,32 @@ export function WorkerDashboardPage() {
           justifyContent: "space-between",
           alignItems: "center"
         }}>
-          <span>💾 <strong>{pendingLogs.length}</strong> offline logs queued</span>
-          <button 
+          <span><strong>{pendingLogs.length}</strong> offline logs queued</span>
+          <button
             onClick={retryPending}
-            style={{
-              padding: "0.5rem 1.5rem",
-              background: "#ffc107",
-              color: "#212529",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "bold"
-            }}
+            style={{ padding: "0.5rem 1.5rem", background: "#ffc107", color: "#212529", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
           >
-            🔄 Sync Now
+            Sync Now
           </button>
         </div>
       )}
 
-      {/* 🔥 JOB OFFERS */}
+      {/* Job Offers */}
       <section style={{ marginBottom: "3rem" }}>
-        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>📋 Job Offers ({offered.length})</h2>
+        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>Job Offers ({offered.length})</h2>
         {offered.length === 0 ? (
-          <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>
-            No new job offers. Check back soon! 🎯
-          </p>
+          <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>No new job offers.</p>
         ) : (
           <div style={{ display: "grid", gap: "1rem" }}>
             {offered.map(assignment => (
-              <div key={assignment.id} style={{
-                border: "1px solid #ddd",
-                borderRadius: "12px",
-                padding: "1.5rem",
-                background: "#f8f9fa",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between"
-              }}>
+              <div key={assignment.id} style={{ border: "1px solid #ddd", borderRadius: "12px", padding: "1.5rem", background: "#f8f9fa", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <h3 style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}>
-                    {assignment.job_title}
-                  </h3>
+                  <h3 style={{ margin: "0 0 0.5rem 0", color: "#1976d2" }}>{assignment.job_title}</h3>
                   <p style={{ margin: 0, color: "#666" }}>Status: <strong>{assignment.status}</strong></p>
                 </div>
                 <div style={{ display: "flex", gap: "1rem" }}>
-                  <button 
-                    onClick={() => runAction(acceptAssignment, assignment.id)}
-                    style={{
-                      padding: "1rem 2rem",
-                      background: "#28a745",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: "bold",
-                      cursor: "pointer"
-                    }}
-                  >
-                    ✅ Accept
-                  </button>
-                  <button 
-                    onClick={() => runAction(declineAssignment, assignment.id)}
-                    style={{
-                      padding: "1rem 2rem",
-                      background: "#dc3545",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: "bold",
-                      cursor: "pointer"
-                    }}
-                  >
-                    ❌ Decline
-                  </button>
+                  <button onClick={() => runAction(acceptAssignment, assignment.id)} style={buttonStyle.success}>Accept</button>
+                  <button onClick={() => runAction(declineAssignment, assignment.id)} style={buttonStyle.danger}>Decline</button>
                 </div>
               </div>
             ))}
@@ -325,185 +266,141 @@ export function WorkerDashboardPage() {
         )}
       </section>
 
-      {/* 🔥 ACTIVE JOBS w/ LOGGING */}
+      {/* Active Jobs */}
       <section style={{ marginBottom: "3rem" }}>
-        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>⚡ Active Jobs ({active.length})</h2>
+        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>Active Jobs ({active.length})</h2>
         <div style={{ display: "grid", gap: "2rem" }}>
           {active.map(assignment => (
-            <article key={assignment.id} style={{
-              border: "1px solid #dee2e6",
-              borderRadius: "16px",
-              padding: "2rem",
-              background: "white",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.08)"
-            }}>
+            <article key={assignment.id} style={{ border: "1px solid #dee2e6", borderRadius: "16px", padding: "2rem", background: "white", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
               <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
                 <h3 style={{ margin: 0, color: "#1976d2" }}>{assignment.job_title}</h3>
-                <span style={{ 
-                  padding: "0.5rem 1rem", 
-                  background: "#e3f2fd", 
-                  borderRadius: "20px", 
-                  fontWeight: "bold",
-                  fontSize: "0.9rem"
-                }}>
+                <span style={{ padding: "0.5rem 1rem", background: "#e3f2fd", borderRadius: "20px", fontWeight: "bold", fontSize: "0.9rem" }}>
                   {assignment.status}
                 </span>
               </header>
 
-              {/* 🔥 ASSIGNMENT ACTIONS */}
               <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", flexWrap: "wrap" }}>
                 {assignment.status === "accepted" && (
-                  <button 
-                    onClick={() => runAction(startAssignment, assignment.id)}
-                    style={buttonStyle.primary}
-                  >
-                    🚀 Mark Started
-                  </button>
+                  <button onClick={() => runAction(startAssignment, assignment.id)} style={buttonStyle.primary}>Mark Started</button>
                 )}
                 {assignment.status === "active" && (
-                  <button 
-                    onClick={() => runAction(completeAssignment, assignment.id)}
-                    style={buttonStyle.success}
-                  >
-                    🎉 Mark Completed
-                  </button>
+                  <button onClick={() => runAction(completeAssignment, assignment.id)} style={buttonStyle.success}>Mark Completed</button>
                 )}
-                <button 
+                <button
                   onClick={() => setActiveDayAssignmentId(assignment.id)}
-                  style={{
-                    ...buttonStyle.primary,
-                    background: activeDayAssignmentId === assignment.id ? "#1976d2" : "#4dabf7"
-                  }}
+                  style={{ ...buttonStyle.primary, background: activeDayAssignmentId === assignment.id ? "#1976d2" : "#4dabf7" }}
                 >
-                  📝 {activeDayAssignmentId === assignment.id ? "Active" : "Start Day"}
+                  {activeDayAssignmentId === assignment.id ? "Active Log" : "Start Day Log"}
                 </button>
               </div>
 
-              {/* 🔥 QUICK VOICE LOG (3-tap field workflow) */}
+              {/* Voice log */}
               {activeDayAssignmentId === assignment.id && (
                 <details style={{ marginBottom: "1.5rem" }}>
-                  <summary style={{ 
-                    fontWeight: "bold", 
-                    padding: "1rem", 
-                    background: "#e3f2fd", 
-                    borderRadius: "8px", 
-                    cursor: "pointer" 
-                  }}>
-                    🎤 Quick Voice Log (3 taps)
+                  <summary style={{ fontWeight: "bold", padding: "1rem", background: "#e3f2fd", borderRadius: "8px", cursor: "pointer" }}>
+                    Quick Voice Log
                   </summary>
                   <div style={{ padding: "1.5rem", background: "#f8f9fa", borderRadius: "8px" }}>
-                    <textarea
-                      rows={3}
-                      placeholder="What did you do today? (voice will auto-fill)"
-                      value={draft.work_completed}
-                      onChange={e => setDraft(prev => ({ ...prev, work_completed: e.target.value }))}
-                      style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }}
-                    />
-                    <textarea
-                      rows={2}
-                      placeholder="Any issues/blockers?"
-                      value={draft.issues_blockers}
-                      onChange={e => setDraft(prev => ({ ...prev, issues_blockers: e.target.value }))}
-                      style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }}
-                    />
-                    <input
-                      placeholder="Photo URL (optional)"
-                      value={draft.photos[0] || ""}
-                      onChange={e => setPhoto(0, e.target.value)}
-                      style={{ width: "100%", padding: "1rem", borderRadius: "8px", marginBottom: "1rem" }}
-                    />
+                    <textarea rows={3} placeholder="What did you do today?" value={draft.work_completed} onChange={e => setDraft(prev => ({ ...prev, work_completed: e.target.value }))} style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }} />
+                    <textarea rows={2} placeholder="Any issues/blockers?" value={draft.issues_blockers} onChange={e => setDraft(prev => ({ ...prev, issues_blockers: e.target.value }))} style={{ width: "100%", marginBottom: "1rem", padding: "1rem", borderRadius: "8px" }} />
+                    <input placeholder="Photo URL (optional)" value={draft.photos[0] || ""} onChange={e => setPhoto(0, e.target.value)} style={{ width: "100%", padding: "1rem", borderRadius: "8px", marginBottom: "1rem" }} />
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
-                      <button 
-                        onClick={handleRecordLog}
-                        style={buttonStyle.primary}
-                      >
-                        🎤 Record Voice Log
-                      </button>
-                      <button 
-                        onClick={handleSubmitLog}
-                        style={buttonStyle.success}
-                      >
-                        ✅ Submit Log
-                      </button>
+                      <button onClick={handleRecordLog} style={buttonStyle.primary}>Record Voice Log</button>
+                      <button onClick={handleSubmitLog} style={buttonStyle.success}>Submit Log</button>
                     </div>
                   </div>
                 </details>
               )}
 
-              {/* 🔥 FORM LOG (office alternative) */}
+              {/* Form log */}
               <details style={{ marginBottom: "1.5rem" }}>
-                <summary style={{ 
-                  fontWeight: "bold", 
-                  padding: "1rem", 
-                  background: "#f8f9fa", 
-                  borderRadius: "8px", 
-                  cursor: "pointer" 
-                }}>
-                  📝 Detailed Form Log
+                <summary style={{ fontWeight: "bold", padding: "1rem", background: "#f8f9fa", borderRadius: "8px", cursor: "pointer" }}>
+                  Detailed Form Log
                 </summary>
-                <form 
-                  onSubmit={e => handleSubmitFormLog(assignment.id, e)}
-                  style={{ padding: "1.5rem", background: "#fafbfc" }}
-                >
+                <form onSubmit={e => handleSubmitFormLog(assignment.id, e)} style={{ padding: "1.5rem", background: "#fafbfc" }}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-                    <input
-                      type="date"
-                      value={getLogForm(assignment.id).logDate}
-                      onChange={e => setLogFormValue(assignment.id, "logDate", e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      step="0.25"
-                      placeholder="Hours"
-                      value={getLogForm(assignment.id).hoursWorked}
-                      onChange={e => setLogFormValue(assignment.id, "hoursWorked", e.target.value)}
-                      required
-                      style={inputStyle}
-                    />
+                    <input type="date" value={getLogForm(assignment.id).logDate} onChange={e => setLogFormValue(assignment.id, "logDate", e.target.value)} required style={inputStyle} />
+                    <input type="number" min="0" max="24" step="0.25" placeholder="Hours" value={getLogForm(assignment.id).hoursWorked} onChange={e => setLogFormValue(assignment.id, "hoursWorked", e.target.value)} required style={inputStyle} />
                   </div>
-                  <textarea
-                    rows={4}
-                    placeholder="Detailed work summary"
-                    value={getLogForm(assignment.id).workSummary}
-                    onChange={e => setLogFormValue(assignment.id, "workSummary", e.target.value)}
-                    required
-                    style={{ ...inputStyle, height: "120px", marginBottom: "1rem" }}
-                  />
-                  <textarea
-                    rows={2}
-                    placeholder="Issues/problems (optional)"
-                    value={getLogForm(assignment.id).issues}
-                    onChange={e => setLogFormValue(assignment.id, "issues", e.target.value)}
-                    style={{ ...inputStyle, height: "80px" }}
-                  />
-                  <button 
-                    type="submit"
-                    style={buttonStyle.primary}
-                  >
-                    📋 Submit Detailed Log
-                  </button>
+                  <textarea rows={4} placeholder="Detailed work summary" value={getLogForm(assignment.id).workSummary} onChange={e => setLogFormValue(assignment.id, "workSummary", e.target.value)} required style={{ ...inputStyle, height: "120px", marginBottom: "1rem" }} />
+                  <textarea rows={2} placeholder="Issues/problems (optional)" value={getLogForm(assignment.id).issues} onChange={e => setLogFormValue(assignment.id, "issues", e.target.value)} style={{ ...inputStyle, height: "80px" }} />
+                  <button type="submit" style={buttonStyle.primary}>Submit Detailed Log</button>
                 </form>
               </details>
 
-              {/* 🔥 RECENT LOGS */}
+              {/* Recent logs */}
               <div>
-                <h4 style={{ marginBottom: "0.5rem" }}>📄 Recent Logs ({(logsByAssignment[assignment.id] || []).length})</h4>
-                <div style={{ 
-                  maxHeight: "200px", 
-                  overflowY: "auto", 
-                  border: "1px solid #eee", 
-                  borderRadius: "8px", 
-                  padding: "1rem" 
-                }}>
+                <h4 style={{ marginBottom: "0.5rem" }}>Recent Logs ({(logsByAssignment[assignment.id] || []).length})</h4>
+                <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #eee", borderRadius: "8px", padding: "1rem" }}>
                   {(logsByAssignment[assignment.id] || []).slice(0, 5).map(log => (
-                    <div key={log.id} style={{ 
-                      padding: "0.75rem", 
-                      borderBottom: "1px solid #f0f0f0",
-                      fontSize: "0.9rem"
-                    }}>
+                    <div key={log.id} style={{ padding: "0.75rem", borderBottom: "1px solid #f0f0f0", fontSize: "0.9rem" }}>
                       <strong>{log.log_date}:</strong> {log.hours_worked}h — {log.work_summary}
-                      {log.issues && <span style={{ color: "#d32f2f", marginLeft:
+                      {log.issues && <span style={{ color: "#d32f2f", marginLeft: "0.5rem" }}>⚠ {log.issues}</span>}
+                    </div>
+                  ))}
+                  {(logsByAssignment[assignment.id] || []).length === 0 && (
+                    <p style={{ color: "#666", margin: 0 }}>No logs yet.</p>
+                  )}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {/* Completed Jobs */}
+      <section style={{ marginBottom: "3rem" }}>
+        <h2 style={{ fontSize: "1.8rem", marginBottom: "1rem" }}>Completed Jobs ({completed.length})</h2>
+        {completed.length === 0 ? (
+          <p style={{ color: "#666", padding: "2rem", textAlign: "center" }}>No completed jobs yet.</p>
+        ) : (
+          <div style={{ display: "grid", gap: "1rem" }}>
+            {completed.map(assignment => (
+              <div key={assignment.id} style={{ border: "1px solid #ddd", borderRadius: "12px", padding: "1.5rem", background: "#f8f9fa" }}>
+                <h3 style={{ margin: "0 0 0.5rem 0", color: "#388e3c" }}>{assignment.job_title}</h3>
+                <p style={{ margin: 0, color: "#666" }}>Status: <strong>{assignment.status}</strong></p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+const buttonStyle = {
+  primary: {
+    padding: "0.75rem 1.5rem",
+    background: "#1976d2",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer"
+  },
+  success: {
+    padding: "0.75rem 1.5rem",
+    background: "#388e3c",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer"
+  },
+  danger: {
+    padding: "0.75rem 1.5rem",
+    background: "#dc3545",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer"
+  }
+};
+
+const inputStyle = {
+  padding: "1rem",
+  border: "1px solid #ddd",
+  borderRadius: "8px",
+  fontSize: "1rem"
+};

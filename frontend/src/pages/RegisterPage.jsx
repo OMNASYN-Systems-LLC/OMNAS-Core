@@ -1,17 +1,35 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { register } from "../services/api.js";
+import { saveRegisteredUser } from "../hooks/useAuth.js";
+
+const ROLES = [
+  { value: "worker",         label: "Worker (field)" },
+  { value: "contractor",     label: "Contractor / GC" },
+  { value: "superintendent", label: "Superintendent / PM" },
+  { value: "client",         label: "Client / Owner" }
+];
 
 export function RegisterPage() {
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "" });
   const [message, setMessage] = useState("");
 
   async function handleSubmit(event) {
     event.preventDefault();
+    if (!form.role) {
+      setMessage("Please select a role.");
+      return;
+    }
 
     try {
-      const response = await register(form);
-      setMessage(`Account created for ${response.data.email}`);
+      // Generate a stable UUID for this user on the client side — the backend
+      // auth service is a pilot stub that does not persist users.
+      const userId = crypto.randomUUID();
+      await register({ name: form.name, email: form.email, password: form.password });
+      saveRegisteredUser(form.email, { id: userId, role: form.role, name: form.name });
+      setMessage(`Account created. Redirecting to login...`);
+      setTimeout(() => navigate("/login"), 1200);
     } catch (error) {
       setMessage(error.message);
     }
@@ -25,23 +43,33 @@ export function RegisterPage() {
           type="text"
           placeholder="Name"
           value={form.name}
-          onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+          onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
           required
         />
         <input
           type="email"
           placeholder="Email"
           value={form.email}
-          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+          onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
           required
         />
         <input
           type="password"
           placeholder="Password"
           value={form.password}
-          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+          onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
           required
         />
+        <select
+          value={form.role}
+          onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
+          required
+        >
+          <option value="">Select your role</option>
+          {ROLES.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
         <button type="submit">Create account</button>
       </form>
       {message ? <p className="message">{message}</p> : null}

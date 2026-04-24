@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { createAssignment, getJobMatches } from "../services/api.js";
+import { getAuth } from "../hooks/useAuth.js";
 
 export function MatchesPage() {
   const { jobId } = useParams();
-  const auth = { userId: "00000000-0000-0000-0000-000000000002", role: "contractor" };
+  const auth = getAuth();
+  if (!auth) return <p>Please <Link to="/login">log in</Link>.</p>;
   const [matches, setMatches] = useState([]);
   const [message, setMessage] = useState("");
 

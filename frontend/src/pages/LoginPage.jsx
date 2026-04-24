@@ -1,8 +1,17 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { login } from "../services/api.js";
+import { getRegisteredUsers, setSession } from "../hooks/useAuth.js";
+
+const ROLE_REDIRECTS = {
+  worker:         "/worker-dashboard",
+  contractor:     "/contractor-dashboard",
+  superintendent: "/dashboard/pivot",
+  client:         "/dashboard/pivot"
+};
 
 export function LoginPage() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [message, setMessage] = useState("");
 
@@ -10,8 +19,18 @@ export function LoginPage() {
     event.preventDefault();
 
     try {
-      const response = await login(form);
-      setMessage(`Welcome back! Session token: ${response.data.token}`);
+      // Backend call kept for health-check; it doesn't persist users in pilot mode.
+      await login(form);
+
+      const users = getRegisteredUsers();
+      const user = users[form.email];
+      if (!user) {
+        setMessage("No account found for this email. Please register first.");
+        return;
+      }
+
+      setSession({ userId: user.id, role: user.role, name: user.name, email: form.email });
+      navigate(ROLE_REDIRECTS[user.role] ?? "/");
     } catch (error) {
       setMessage(error.message);
     }
@@ -25,14 +44,14 @@ export function LoginPage() {
           type="email"
           placeholder="Email"
           value={form.email}
-          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+          onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
           required
         />
         <input
           type="password"
           placeholder="Password"
           value={form.password}
-          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+          onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
           required
         />
         <button type="submit">Login</button>

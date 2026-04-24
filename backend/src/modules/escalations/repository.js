@@ -27,14 +27,14 @@ export async function listEscalations(status = "pending") {
 export async function updateEscalationStatus(id, status, resolutionNote) {
   const query = `
     UPDATE escalation_events
-    SET status = $2,
-        resolution_note = COALESCE($3, resolution_note),
-        resolved_at = CASE WHEN $2 = 'resolved' THEN NOW() ELSE resolved_at END
-    WHERE id = $1
+    SET status          = $2::VARCHAR,
+        resolution_note = COALESCE($3::TEXT, resolution_note),
+        resolved_at     = CASE WHEN $2::VARCHAR = 'resolved' THEN NOW() ELSE resolved_at END
+    WHERE id = $1::BIGINT
     RETURNING id, task_id, zone, reason, rule_triggered, severity, suggested_action, status, created_at, resolved_at, resolution_note
   `;
 
-  const { rows } = await db.query(query, [id, status, resolutionNote || null]);
+  const { rows } = await db.query(query, [id, status, resolutionNote ?? null]);
   return rows[0] ?? null;
 }
 

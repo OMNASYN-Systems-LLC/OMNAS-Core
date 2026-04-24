@@ -66,7 +66,7 @@ export async function handleCompanySuspended({ companyId, reason, changedBy }) {
           zone:           "compliance",
           reason:         `Company suspended — assignment ${row.assignment_id} locked for worker ${row.worker_user_id}. ${reason ?? ""}`.trim(),
           ruleTriggered:  "COMPANY_SUSPENDED",
-          severity:       "high",
+          severity:       "RED",
           suggestedAction: "Review and reassign affected workers or restore company compliance before accepting new assignments.",
           status:         "pending"
         });
