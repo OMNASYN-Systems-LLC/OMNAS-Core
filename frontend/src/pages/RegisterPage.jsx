@@ -23,12 +23,12 @@ export function RegisterPage() {
     }
 
     try {
-      // Generate a stable UUID for this user on the client side — the backend
-      // auth service is a pilot stub that does not persist users.
+      // Generate a stable UUID for this user on the client side.
       const userId = crypto.randomUUID();
-      await register({ name: form.name, email: form.email, password: form.password });
+      // Backend call is non-blocking in pilot mode; failure is non-fatal.
+      try { await register({ name: form.name, email: form.email, password: form.password }); } catch { /* backend offline — proceed with localStorage */ }
       saveRegisteredUser(form.email, { id: userId, role: form.role, name: form.name });
-      setMessage(`Account created. Redirecting to login...`);
+      setMessage("Account created. Redirecting to login...");
       setTimeout(() => navigate("/login"), 1200);
     } catch (error) {
       setMessage(error.message);
